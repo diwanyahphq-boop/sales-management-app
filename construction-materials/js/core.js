@@ -99,12 +99,15 @@ const License = {
       d = { machine: m, trialStart: now, lastSeen: now, serials: {} };
     }
     d.serials = d.serials || {};
+    // لكل برنامج بداية تجربة مستقلة على نفس الحاسبة (رقم الحاسبة مشترك بين برامج المثلث)
+    d.trials = d.trials || {};
+    if (!d.trials[APP.code]) d.trials[APP.code] = (APP.code === 'BLD' && d.trialStart) || Date.now();
     d.lastSeen = Math.max(Date.now(), d.lastSeen || 0); // إرجاع الساعة لا يمدد التجربة
     this.data = d; lsSet(this.KEY, d);
     return this;
   },
   get activated() { const s = this.data.serials[APP.code]; return !!s && normSerial(s) === normSerial(serialFor(APP.code, this.data.machine)); },
-  get daysLeft() { const now = Math.max(Date.now(), this.data.lastSeen || 0); return Math.max(0, Math.ceil(APP.trialDays - (now - this.data.trialStart) / 86400000)); },
+  get daysLeft() { const now = Math.max(Date.now(), this.data.lastSeen || 0); return Math.max(0, Math.ceil(APP.trialDays - (now - this.data.trials[APP.code]) / 86400000)); },
   get expired() { return !this.activated && this.daysLeft <= 0; },
   activate(serial) {
     if (normSerial(serial) !== normSerial(serialFor(APP.code, this.data.machine))) return false;
