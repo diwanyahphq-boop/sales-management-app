@@ -1,4 +1,4 @@
-/* المثلث · نظام إدارة العدد اليدوية — المخزن والمشتريات والمستندات والتقارير والإدارة */
+/* المثلث · نظام مستودع العدد الإنشائية — المخزن والمشتريات والمستندات والتقارير والإدارة */
 'use strict';
 
 /* ===================== العدد والمخزن ===================== */
@@ -14,7 +14,7 @@ Views.materials = {
       <select class="sel" id="m-cat" style="width:auto"><option value="">كل الأصناف</option>${cats.map(c => `<option ${MatF.cat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
       <label class="check"><input type="checkbox" id="m-low" ${MatF.low ? 'checked' : ''}> تحت حد الطلب فقط</label>
       <span class="spacer"></span><button class="btn" data-act="labels" ${MatF.sel.size ? '' : 'disabled'}>${ICO('tag')} ملصقات باركود (${MatF.sel.size})</button>
-      <button class="btn" data-act="csvMaterials">${ICO('sheet')} Excel</button>${can('scanner') ? `<button class="btn" data-go="scanner">${ICO('scan')} إدخال بالماسح</button>` : ''}<button class="btn pri" data-act="newMaterial">${ICO('plus')} صنف جديد</button></div>
+      <button class="btn" data-act="snCheck">${ICO('shield')} تحقق من رقم تسلسلي</button><button class="btn" data-act="csvMaterials">${ICO('sheet')} Excel</button>${can('scanner') ? `<button class="btn" data-go="scanner">${ICO('scan')} إدخال بالماسح</button>` : ''}<button class="btn pri" data-act="newMaterial">${ICO('plus')} صنف جديد</button></div>
       <div class="card"><div class="tbl-wrap"><table class="tbl"><thead><tr><th style="width:34px"></th><th>الصنف</th><th>الباركود</th><th>الوحدة</th><th>المخزون</th>${can('cost') ? '<th class="n">الكلفة</th>' : ''}<th class="n">سعر المفرد</th><th class="n">سعر الجملة</th><th>الموقع</th><th></th></tr></thead><tbody>
       ${rows.map(m => {
         const st = stockState(m);
@@ -51,7 +51,7 @@ function editMaterial(id, preset = {}) {
       <div class="field" style="grid-column:span 2"><label>الباركود</label><div class="row" style="flex-wrap:nowrap"><input class="inp mono" name="barcode" value="${esc(m.barcode)}" dir="ltr" placeholder="امسح باركود الصنف هنا أو ولّد رقماً"><button type="button" class="btn icon" data-gen title="توليد">${ICO('sparkle')}</button><button type="button" class="btn icon" data-cam title="كاميرا">${ICO('camera')}</button></div><div id="bc-prev" style="height:40px;margin-top:6px;max-width:220px"></div></div>
       ${can('cost') ? `<div class="field"><label>سعر الكلفة</label><input class="inp num" name="cost" value="${m.cost}" inputmode="decimal"></div>` : ''}
       <div class="field"><label>سعر المفرد</label><input class="inp num" name="price" value="${m.price}" inputmode="decimal"></div>
-      <div class="field"><label>سعر الجملة / الورش</label><input class="inp num" name="wprice" value="${m.wprice}" inputmode="decimal"></div>
+      <div class="field"><label>سعر الجملة / المقاول</label><input class="inp num" name="wprice" value="${m.wprice}" inputmode="decimal"></div>
       ${id ? `<div class="field"><label>المخزون الحالي</label><input class="inp num" value="${m.stock}" disabled><span class="hint">للتعديل استخدم «تسوية»</span></div>` : `<div class="field"><label>الرصيد الافتتاحي</label><input class="inp num" name="stock" value="${m.stock}" inputmode="decimal"></div>`}
       <div class="field"><label>حد إعادة الطلب</label><input class="inp num" name="min" value="${m.min}" inputmode="decimal"></div>
       <div class="field"><label>المورد</label><select class="sel" name="supplierId"><option value="">—</option>${db.suppliers.map(s => `<option value="${s.id}" ${s.id === m.supplierId ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
@@ -363,11 +363,9 @@ function reportData() {
   const collected = db.payments.filter(p => p.type === 'in' && p.party === 'c' && inP(p)).reduce((s, p) => s + p.amount, 0) - db.payments.filter(p => p.type === 'out' && p.party === 'c' && inP(p)).reduce((s, p) => s + p.amount, 0);
   const purchases = db.purchases.filter(p => !p.void && inP(p)).reduce((s, p) => s + p.total, 0);
   const expenses = db.expenses.filter(inP).reduce((s, e) => s + e.amount, 0);
-  const repairsRev = db.payments.filter(p => p.type === 'in' && p.party === 'r' && inP(p)).reduce((s, p) => s + p.amount, 0);
   const returns = liveSales().reduce((s, i) => s + (i.returns || []).filter(inP).reduce((a, r) => a + r.amount, 0), 0);
   const sales = inv.reduce((s, i) => s + invNet(i), 0);
-  const repairs = db.payments.filter(p => p.type === 'in' && p.party === 'r' && inP(p)).reduce((s, p) => s + p.amount, 0);
-  return { repairs, from, to, inv, sales, net, cost, profit: net - cost, expenses, netProfit: net - cost - expenses + repairsRev, returns, collected, purchases, byCat, byMat, byUser, delivery: inv.reduce((s, i) => s + (i.delivery || 0), 0) };
+  return { from, to, inv, sales, net, cost, profit: net - cost, expenses, netProfit: net - cost - expenses, returns, collected, purchases, byCat, byMat, byUser, delivery: inv.reduce((s, i) => s + (i.delivery || 0), 0) };
 }
 Views.reports = {
   dim: () => { const [f, t] = repRange(); return `${fdate(f)} — ${fdate(t)}`; },
@@ -388,8 +386,8 @@ Views.reports = {
     </div>
     ${cc ? `<div class="grid g4" style="margin-bottom:18px">
       <div class="card kpi danger"><div class="k-top"><span class="k-ico">${ICO('wallet')}</span>المصروفات</div><div class="k-val num">${money(R.expenses)}</div><div class="k-sub">رواتب، نقل، كهرباء…</div></div>
-      <div class="card kpi" style="grid-column:span 2"><div class="k-top"><span class="k-ico">${ICO('bolt')}</span>صافي الربح بعد المصروفات</div><div class="k-val num ${R.netProfit < 0 ? 'danger-t' : 'ok-t'}">${money(R.netProfit)}</div><div class="k-sub">مجمل الربح ${moneyT(R.profit)} + الصيانة ${moneyT(R.repairs)} − المصروفات ${moneyT(R.expenses)}</div></div>
-      <div class="card kpi warn"><div class="k-top"><span class="k-ico">${ICO('undo')}</span>المرتجعات</div><div class="k-val num">${money(R.returns)}</div><div class="k-sub">مخصومة من المبيعات · إيرادات الصيانة ${moneyT(R.repairs)}</div></div></div>` : ''}
+      <div class="card kpi" style="grid-column:span 2"><div class="k-top"><span class="k-ico">${ICO('bolt')}</span>صافي الربح بعد المصروفات</div><div class="k-val num ${R.netProfit < 0 ? 'danger-t' : 'ok-t'}">${money(R.netProfit)}</div><div class="k-sub">مجمل الربح ${moneyT(R.profit)} − المصروفات ${moneyT(R.expenses)}</div></div>
+      <div class="card kpi warn"><div class="k-top"><span class="k-ico">${ICO('undo')}</span>المرتجعات</div><div class="k-val num">${money(R.returns)}</div><div class="k-sub">مخصومة من المبيعات</div></div></div>` : ''}
     <div class="grid g-side" style="margin-bottom:18px">
       <div class="card"><div class="card-h"><h3>المبيعات اليومية</h3></div><div class="card-b">${days <= 92 ? barChart(salesByDay(R.from, R.to)) : '<p class="muted">اختر فترة أقصر من 3 أشهر لعرض المخطط اليومي.</p>'}</div></div>
       <div class="card"><div class="card-h"><h3>المبيعات حسب الصنف</h3></div><div class="card-b"><div class="hbars">${cats.map(([c, v]) => `<div class="hbar" data-tip="<b>${esc(c)}</b><br>${moneyT(v)} · ${R.sales ? fmt(v / R.sales * 100) : 0}%"><span>${esc(c)}</span><div class="tr"><i style="width:${v / maxC * 100}%"></i></div><span class="v">${fmt(v)}</span></div>`).join('') || '<p class="muted">لا توجد مبيعات</p>'}</div></div></div>
@@ -561,7 +559,7 @@ Object.assign(ACTS, {
     toast(r.ok ? 'نجح الاختبار، وصلت الرسالة. احفظ الإعدادات.' : 'فشل الاختبار: ' + r.err, r.ok ? 'ok' : 'err', 7000);
   },
   setTheme: el => { Theme.set(el.dataset.t); Shell.refresh(); },
-  backup: async () => { downloadFile(`نسخة-المثلث-العدد-اليدوية-${today()}.json`, await backupJSON()); logAct('نسخة احتياطية'); saveDb(); },
+  backup: async () => { downloadFile(`نسخة-المثلث-العدد-الإنشائية-${today()}.json`, await backupJSON()); logAct('نسخة احتياطية'); saveDb(); },
   backupCopy: async () => copyText(await backupJSON()),
   restorePaste: () => {
     const m = modal({ title: 'استعادة بلصق النص', body: `<textarea class="txt" rows="10" id="rp" dir="ltr" placeholder="الصق نص النسخة الاحتياطية هنا"></textarea>`, foot: `<button class="btn pri" data-ok>استعادة</button>` });

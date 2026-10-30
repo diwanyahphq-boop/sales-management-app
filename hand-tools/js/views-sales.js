@@ -1,4 +1,4 @@
-/* المثلث · نظام إدارة العدد اليدوية — الشاشات: لوحة القيادة، نقطة البيع، الفواتير، التوصيل */
+/* المثلث · نظام مستودع العدد الإنشائية — الشاشات: لوحة القيادة، نقطة البيع، الفواتير، التوصيل */
 'use strict';
 
 const Views = {};
@@ -9,7 +9,7 @@ const meter = m => {
   const st = stockState(m), cap = Math.max((m.min || 1) * 4, 1), f = Math.max(0, Math.min(8, Math.round((m.stock / cap) * 8)));
   return `<div class="meter ${st === 'low' || st === 'out' ? 'low' : st === 'mid' ? 'mid' : ''}" title="الحد الأدنى ${fmt(m.min)}">${Array.from({ length: 8 }, (_, i) => `<i class="${i < f ? 'f' : ''}"></i>`).join('')}</div>`;
 };
-const initial = n => { const w = String(n || '?').trim().split(/\s+/); const k = w.length > 1 && /^(المقاول|ورشة|شركة|مؤسسة|مكتب|معمل|مخازن|مركز)$/.test(w[0]) ? w[1] : w[0]; return k.replace(/^ال(?=..)/, '')[0] || '?'; };
+const initial = n => { const w = String(n || '?').trim().split(/\s+/); const k = w.length > 1 && /^(المقاول|ورشة|شركة|مستودع|مؤسسة|مكتب|معمل|مخازن|مركز)$/.test(w[0]) ? w[1] : w[0]; return k.replace(/^ال(?=..)/, '')[0] || '?'; };
 const statusChip = inv => { const s = invStatus(inv); return `<span class="chip ${s.c}">${s.t}</span>`; };
 
 /* مخطط أعمدة بسلسلة واحدة */
@@ -55,7 +55,6 @@ Views.dash = {
         ${can('pos') ? `<button class="btn pri" data-go="pos">${ICO('pos')} فاتورة جديدة <kbd style="background:transparent;color:inherit;border-color:rgba(255,255,255,.4)">F2</kbd></button>` : ''}
         ${can('payments') ? `<button class="btn" data-act="newReceipt">${ICO('cash')} استلام دفعة</button>` : ''}
         ${can('materials') ? `<button class="btn" data-act="newMaterial">${ICO('plus')} صنف</button>` : ''}
-        ${can('repairs') ? `<button class="btn" data-act="tkNew">${ICO('wrench')} استلام صيانة</button>` : ''}
         ${can('scanner') ? `<button class="btn brass" data-go="scanner">${ICO('scan')} محطة الماسح</button>` : ''}
         ${can('chat') ? `<button class="btn" data-go="chat">${ICO('msg')} المحادثات${Shell.counts().chat ? ` <span class="chip dan plain">${Shell.counts().chat}</span>` : ''}</button>` : ''}
       </div></div>
@@ -77,8 +76,8 @@ Views.dash = {
           ${can('messages') && r.c.phone ? `<button class="btn xs icon" data-act="remind" data-id="${r.c.id}" title="إرسال تذكير">${ICO('wa')}</button>` : ''}</div>`).join('') || emptyHTML('check', 'لا توجد ديون مستحقة')}</div></div>
       <div class="card"><div class="card-h"><h3>آخر الفواتير</h3>${can('invoices') ? `<button class="btn xs" data-go="invoices">الكل</button>` : ''}</div>
         <div class="list">${db.invoices.filter(i => i.kind === 'sale').slice(0, 5).map(i => `<div class="li" style="cursor:pointer" data-act="viewInv" data-id="${i.id}"><div class="l-ico">${ICO('inv')}</div><div class="l-main"><b>${esc(custName(i.customerId))}</b><span>رقم ${i.no} · ${fdate(i.date)}</span></div><div class="l-end"><div class="num">${fmt(i.total)}</div>${statusChip(i)}</div></div>`).join('') || emptyHTML('inv', 'لا توجد فواتير بعد')}</div></div>
-      <div class="card"><div class="card-h"><h3>الصيانة المفتوحة</h3>${can('repairs') ? `<button class="btn xs" data-go="repairs">اللوحة</button>` : ''}</div>
-        <div class="list">${db.tickets.filter(t => t.state !== 'done').slice(0, 5).map(t => `<div class="li" style="cursor:pointer" data-act="tkView" data-id="${t.id}"><div class="l-ico">${ICO('wrench')}</div><div class="l-main"><b>${esc(t.item.split(' — ')[0])}</b><span>#${t.no} · ${esc(t.name)}</span></div><div class="l-end"><span class="chip ${t.state === 'ready' ? 'ok' : t.state === 'fix' ? 'acc' : 'brass'}">${tkState(t.state)[1]}</span></div></div>`).join('') || emptyHTML('wrench', 'لا توجد تذاكر مفتوحة')}</div></div>
+      <div class="card"><div class="card-h"><h3>شحنات قيد التوصيل</h3>${can('deliveries') ? `<button class="btn xs" data-go="deliveries">اللوحة</button>` : ''}</div>
+        <div class="list">${ships.slice(0, 5).map(i => `<div class="li"><div class="l-ico">${ICO('truck')}</div><div class="l-main"><b>${esc(i.ship.addr || custName(i.customerId))}</b><span>${esc(i.ship.driver || 'بدون سائق')} · ${esc(i.ship.vehicle || '')}</span></div><div class="l-end"><span class="chip ${i.ship.state === 'road' ? 'acc' : 'brass'}">${i.ship.state === 'road' ? 'في الطريق' : 'بانتظار التحميل'}</span></div></div>`).join('') || emptyHTML('truck', 'لا توجد شحنات معلّقة')}</div></div>
     </div>`;
   }
 };
@@ -147,7 +146,7 @@ function renderTicket() {
       <div class="row" style="margin-top:10px"><select class="sel sm" id="pos-cust" style="flex:1"><option value="">زبون نقدي</option>${db.customers.map(x => `<option value="${x.id}" ${x.id === POS.customerId ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
         ${can('customers') ? `<button class="btn sm icon" data-act="posNewCust" title="زبون جديد">${ICO('plus')}</button>` : ''}</div>
       ${c ? `<div class="row" style="margin-top:6px;font-size:12px;color:var(--muted)"><span>الرصيد الحالي: <b class="${custBalance(c.id) > 0 ? 'danger-t' : ''}">${moneyT(custBalance(c.id))}</b></span>${c.limit ? `<span>· سقف الدين ${moneyT(c.limit)}</span>` : ''}</div>` : ''}
-      <div class="row" style="margin-top:8px"><span class="muted" style="font-size:12.5px">التسعير:</span><div class="seg"><button class="${POS.tier === 'retail' ? 'on' : ''}" data-act="posTier" data-t="retail">مفرد</button><button class="${POS.tier === 'wholesale' ? 'on' : ''}" data-act="posTier" data-t="wholesale">جملة / ورش</button></div></div>
+      <div class="row" style="margin-top:8px"><span class="muted" style="font-size:12.5px">التسعير:</span><div class="seg"><button class="${POS.tier === 'retail' ? 'on' : ''}" data-act="posTier" data-t="retail">مفرد</button><button class="${POS.tier === 'wholesale' ? 'on' : ''}" data-act="posTier" data-t="wholesale">جملة / مقاول</button></div></div>
     </div>
     <div class="tk-lines">${POS.lines.map((l, i) => `<div class="tk-line" data-mid="${l.mid}">
         <div class="nm">${esc(l.name)}<small>${fmt(l.price)} × ${fmt(l.qty)} ${esc(l.unit)}</small></div><div class="tot">${fmt(l.qty * l.price)}</div>
@@ -158,7 +157,7 @@ function renderTicket() {
     <div class="tk-sum">
       <div class="r"><span>المجموع</span><b class="num">${fmt(T.sub)}</b></div>
       ${can('price') ? `<div class="r"><span>الخصم</span><input class="inp sm num" id="pos-disc" value="${POS.discount || ''}" placeholder="0" inputmode="decimal"></div>` : ''}
-      <div class="r"><label class="check"><input type="checkbox" id="pos-ship" ${POS.ship ? 'checked' : ''}> توصيل للزبون</label>${POS.ship ? `<input class="inp sm num" id="pos-del" value="${POS.delivery || ''}" placeholder="أجور النقل" inputmode="decimal">` : ''}</div>
+      <div class="r"><label class="check"><input type="checkbox" id="pos-ship" ${POS.ship ? 'checked' : ''}> توصيل للموقع</label>${POS.ship ? `<input class="inp sm num" id="pos-del" value="${POS.delivery || ''}" placeholder="أجور النقل" inputmode="decimal">` : ''}</div>
       ${POS.ship ? `<input class="inp sm" id="pos-addr" placeholder="عنوان التسليم" value="${esc(POS.addr || (c ? c.site : ''))}">
         <div class="row" style="flex-wrap:nowrap"><input class="inp sm" id="pos-driver" placeholder="السائق" value="${esc(POS.driver)}"><input class="inp sm" id="pos-veh" placeholder="رقم العجلة" value="${esc(POS.vehicle)}"></div>` : ''}
       ${T.rate ? `<div class="r"><span>الضريبة ${T.rate}%</span><b class="num">${fmt(T.tax)}</b></div>` : ''}
@@ -334,7 +333,7 @@ Object.assign(ACTS, {
 
 /* ===================== التوصيل ===================== */
 Views.deliveries = {
-  dim: () => 'متابعة شحنات الطلبات إلى الزبائن والورش',
+  dim: () => 'متابعة شحنات العدد إلى مواقع العمل',
   render() {
     const all = db.invoices.filter(i => i.kind === 'sale' && !i.void && i.ship);
     const lanes = [['wait', 'بانتظار التحميل', 'var(--brass)'], ['road', 'في الطريق', 'var(--accent)'], ['done', 'تم التسليم', 'var(--ok)']];

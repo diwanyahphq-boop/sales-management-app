@@ -1,4 +1,4 @@
-/* المثلث · نظام إدارة العدد اليدوية — الحسابات: الزبائن، الموردون، القوائم المستحقة، السندات، الرسائل */
+/* المثلث · نظام مستودع العدد الإنشائية — الحسابات: الزبائن، الموردون، القوائم المستحقة، السندات، الرسائل */
 'use strict';
 
 /* ===================== الزبائن ===================== */
@@ -9,7 +9,7 @@ Views.customers = {
     const q = CustF.q.toLowerCase();
     const rows = db.customers.filter(c => (!CustF.type || c.type === CustF.type) && (!q || c.name.toLowerCase().includes(q) || (c.phone || '').includes(q) || (c.site || '').toLowerCase().includes(q)));
     return `<div class="toolbar"><div class="search">${ICO('search')}<input class="inp" id="c-q" placeholder="الاسم أو الهاتف أو الموقع" value="${esc(CustF.q)}"></div>
-      <div class="seg">${[['', 'الكل'], ['ورشة', 'ورش'], ['شركة', 'شركات'], ['فرد', 'أفراد']].map(([k, t]) => `<button class="${CustF.type === k ? 'on' : ''}" data-act="custType" data-t="${k}">${t}</button>`).join('')}</div>
+      <div class="seg">${[['', 'الكل'], ['مقاول', 'مقاولون'], ['شركة', 'شركات'], ['فرد', 'أفراد']].map(([k, t]) => `<button class="${CustF.type === k ? 'on' : ''}" data-act="custType" data-t="${k}">${t}</button>`).join('')}</div>
       <span class="spacer"></span><button class="btn" data-act="csvCustomers">${ICO('sheet')} Excel</button><button class="btn pri" data-act="newCust">${ICO('plus')} زبون جديد</button></div>
       <div class="card"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>الزبون</th><th>النوع</th><th>الهاتف</th><th class="n">الفواتير</th><th class="n">الرصيد المستحق</th><th>سقف الدين</th><th></th></tr></thead><tbody>
       ${rows.map(c => {
@@ -22,16 +22,16 @@ Views.customers = {
             ${c.phone && can('messages') ? `<button class="btn xs icon" data-act="remind" data-id="${c.id}" title="رسالة">${ICO('wa')}</button>` : ''}
             <button class="btn xs icon" data-act="editCust" data-id="${c.id}" title="تعديل">${ICO('edit')}</button>
             ${can('void') ? `<button class="btn xs icon dan" data-act="delCust" data-id="${c.id}" title="حذف">${ICO('trash')}</button>` : ''}</div></td></tr>`;
-      }).join('')}</tbody></table>${rows.length ? '' : emptyHTML('helmet', 'لا يوجد زبائن', '<br>أضف الورش والشركات لتتبع حساباتهم الآجلة')}</div></div>`;
+      }).join('')}</tbody></table>${rows.length ? '' : emptyHTML('helmet', 'لا يوجد زبائن', '<br>أضف المقاولين والشركات لتتبع حساباتهم الآجلة')}</div></div>`;
   },
   after() { const q = $('#c-q'); q.addEventListener('input', debounce(() => { CustF.q = q.value.trim(); Shell.refresh(); const n = $('#c-q'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250)); }
 };
 function editCustomer(id, onSaved) {
-  const c = id ? custById(id) : { name: '', type: 'ورشة', phone: '', site: '', limit: 0, notes: '' };
+  const c = id ? custById(id) : { name: '', type: 'مقاول', phone: '', site: '', limit: 0, notes: '' };
   const m = modal({
     title: id ? 'تعديل بيانات الزبون' : 'زبون جديد',
     body: `<div class="form-grid"><div class="field full"><label>الاسم الكامل / اسم الشركة</label><input class="inp" name="name" value="${esc(c.name)}"></div>
-      <div class="field"><label>النوع</label><select class="sel" name="type">${['ورشة', 'شركة', 'فرد'].map(t => `<option ${c.type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+      <div class="field"><label>النوع</label><select class="sel" name="type">${['مقاول', 'شركة', 'فرد'].map(t => `<option ${c.type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
       <div class="field"><label>رقم الهاتف (واتساب)</label><input class="inp" name="phone" value="${esc(c.phone)}" dir="ltr" placeholder="07XXXXXXXXX"></div>
       <div class="field full"><label>العنوان</label><input class="inp" name="site" value="${esc(c.site)}"></div>
       <div class="field"><label>سقف الدين المسموح</label><input class="inp num" name="limit" value="${c.limit || ''}" placeholder="بدون سقف" inputmode="decimal"><span class="hint">ينبّه النظام عند تجاوزه في البيع الآجل</span></div>
@@ -348,7 +348,7 @@ Views.messages = {
     }
     if (MsgF.tab === 'bulk') {
       const aud = audience(MsgF.aud);
-      return tabs + `<div class="card"><div class="card-b"><div class="field"><label>الجمهور المستهدف</label><div class="seg">${[['debt', 'أصحاب الديون'], ['over', 'المتأخرون'], ['all', 'جميع الزبائن'], ['ورشة', 'الورش'], ['شركة', 'الشركات'], ['فرد', 'الأفراد']].map(([k, t]) => `<button class="${MsgF.aud === k ? 'on' : ''}" data-act="msgAud" data-a="${k}">${t}</button>`).join('')}</div></div>
+      return tabs + `<div class="card"><div class="card-b"><div class="field"><label>الجمهور المستهدف</label><div class="seg">${[['debt', 'أصحاب الديون'], ['over', 'المتأخرون'], ['all', 'جميع الزبائن'], ['مقاول', 'المقاولون'], ['شركة', 'الشركات'], ['فرد', 'الأفراد']].map(([k, t]) => `<button class="${MsgF.aud === k ? 'on' : ''}" data-act="msgAud" data-a="${k}">${t}</button>`).join('')}</div></div>
         <p class="muted">${aud.length} مستلم، منهم ${aud.filter(r => intlPhone(r.c.phone)).length} لديهم رقم هاتف.</p>
         <div class="row" style="gap:8px;margin-bottom:14px;flex-wrap:wrap">${aud.slice(0, 30).map(r => `<span class="chip plain">${esc(r.c.name)}</span>`).join('')}${aud.length > 30 ? `<span class="muted">و${aud.length - 30} آخرين</span>` : ''}</div>
         <button class="btn brass" data-act="bulkGo" ${aud.length ? '' : 'disabled'}>${ICO('send')} كتابة الرسالة وإرسالها</button></div></div>`;

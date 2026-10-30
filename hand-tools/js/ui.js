@@ -1,4 +1,4 @@
-/* المثلث · نظام إدارة العدد اليدوية — الواجهة العامة: الجلسة، النوافذ، الهيكل، الماسح، لوحة الأوامر */
+/* المثلث · نظام مستودع العدد الإنشائية — الواجهة العامة: الجلسة، النوافذ، الهيكل، الماسح، لوحة الأوامر */
 'use strict';
 
 /* ===== الجلسة والصلاحيات ===== */
@@ -192,9 +192,9 @@ function quickMaterial(m) {
 /* ===== الهيكل العام ===== */
 const NAV = [
   ['', [['dash', 'لوحة القيادة', 'dash']]],
-  ['المبيعات', [['pos', 'نقطة البيع', 'pos'], ['invoices', 'الفواتير والعروض', 'inv'], ['repairs', 'الصيانة والضمان', 'wrench'], ['deliveries', 'التوصيل', 'truck']]],
+  ['المبيعات', [['pos', 'نقطة البيع', 'pos'], ['invoices', 'الفواتير والعروض', 'inv'], ['deliveries', 'التوصيل للمواقع', 'truck']]],
   ['المخزن', [['scanner', 'محطة الماسح', 'scan'], ['materials', 'العدد والمخزن', 'wrench'], ['purchases', 'المشتريات', 'cart']]],
-  ['الحسابات', [['customers', 'الزبائن والورش', 'helmet'], ['suppliers', 'الموردون', 'factory'], ['dues', 'القوائم المستحقة', 'alarm'], ['payments', 'سندات القبض والصرف', 'receipt'], ['cashbox', 'الصندوق والمصروفات', 'wallet']]],
+  ['الحسابات', [['customers', 'الزبائن والمقاولون', 'helmet'], ['suppliers', 'الموردون', 'factory'], ['dues', 'القوائم المستحقة', 'alarm'], ['payments', 'سندات القبض والصرف', 'receipt'], ['cashbox', 'الصندوق والمصروفات', 'wallet']]],
   ['التواصل والأرشيف', [['chat', 'المحادثات', 'msg'], ['messages', 'رسائل الزبائن', 'wa'], ['docs', 'أرشيف المستندات', 'doc']]],
   ['الإدارة', [['reports', 'التقارير', 'chart'], ['users', 'المستخدمون والصلاحيات', 'shield'], ['log', 'سجل العمليات', 'log'], ['settings', 'الإعدادات', 'gear']]]
 ];
@@ -215,8 +215,7 @@ const Shell = {
     const low = db.materials.filter(m => ['low', 'out'].includes(stockState(m))).length;
     const ship = db.invoices.filter(i => i.kind === 'sale' && !i.void && i.ship && i.ship.state !== 'done').length;
     const chat = Session.user ? db.notices.filter(n => (n.to === 'all' || n.to === Session.user.id) && !n.readBy.includes(Session.user.id)).length : 0;
-    const repairs = db.tickets.filter(t => t.state === 'recv' || t.state === 'ready').length;
-    return { dues: over, materials: low, deliveries: ship, chat, repairs };
+    return { dues: over, materials: low, deliveries: ship, chat };
   },
   nav() {
     const c = this.counts();
@@ -261,7 +260,7 @@ const Shell = {
     this.nav(); this.top(); this.trial();
     $('#view').innerHTML = v ? v.render() : '';
     v && v.after && v.after();
-    document.title = `المثلث · ${ROUTE_TITLE[this.route] || 'العدد اليدوية'}`;
+    document.title = `المثلث · ${ROUTE_TITLE[this.route] || 'العدد الإنشائية'}`;
   }
 };
 const rerender = () => { saveDb(); Shell.refresh(); };
@@ -293,8 +292,7 @@ function openCmdk() {
   const inp = $('input', bg), list = $('.cmdk-list', bg); let items = [], sel = 0;
   const actions = [
     can('pos') && { s: 'أوامر', t: 'فاتورة بيع جديدة', i: 'pos', k: 'F2', run: () => Shell.go('pos') },
-    can('repairs') && { s: 'أوامر', t: 'استلام عدّة للصيانة', i: 'wrench', run: () => ticketModal(null) },
-    can('repairs') && { s: 'أوامر', t: 'التحقق من ضمان برقم تسلسلي', i: 'shield', run: () => ACTS.tkCheck() },
+    { s: 'أوامر', t: 'التحقق من رقم تسلسلي وضمان', i: 'shield', run: () => ACTS.snCheck() },
     can('materials') && { s: 'أوامر', t: 'إضافة صنف جديد', i: 'plus', run: () => editMaterial(null) },
     can('customers') && { s: 'أوامر', t: 'إضافة زبون جديد', i: 'helmet', run: () => editCustomer(null) },
     can('payments') && { s: 'أوامر', t: 'سند قبض من زبون', i: 'cash', run: () => paymentModal('in') },
@@ -348,8 +346,8 @@ const BLUEPRINT = `<svg class="bp" viewBox="0 0 560 360" fill="none" stroke-line
 function gate(formHTML) {
   return `<div class="gate">
     <section class="gate-art">${brandHTML()}
-      <div><h2>كل مفتاح وكل مفك <em>بمواصفاته وضمانه</em></h2><p>نظام متكامل لمحلات ومعارض العدد اليدوية والكهربائية: بطاقة مواصفات لكل عدّة، أرقام تسلسلية وضمان، صيانة، مبيعات بالباركود، حسابات الورش وتذكير الديون عبر واتساب.</p>
-      <div class="gate-feats"><span>بطاقة مواصفات وصورة</span><span>رقم تسلسلي وضمان</span><span>تذاكر صيانة</span><span>محطة الماسح</span><span>واتساب ومحادثات</span></div></div>
+      <div><h2>كل عدّة في المستودع <em>بمواصفاتها ورصيدها</em></h2><p>نظام متكامل لمستودعات بيع العدد الإنشائية اليدوية والكهربائية: بطاقة مواصفات وصورة لكل عدّة، مبيعات بالباركود، توصيل للمواقع، حسابات المقاولين وتذكير الديون عبر واتساب.</p>
+      <div class="gate-feats"><span>بطاقة مواصفات وصورة</span><span>أسعار مفرد وجملة</span><span>حسابات المقاولين</span><span>محطة الماسح</span><span>واتساب ومحادثات</span></div></div>
       <div>${BLUEPRINT}<div style="font-size:12px;color:#7f9a94">الإصدار ${APP.version}</div></div>
     </section>
     <section class="gate-form"><div class="gate-box">${formHTML}</div>${footHTML()}</section>

@@ -1,4 +1,4 @@
-/* المثلث · نظام إدارة العدد اليدوية — تفاصيل العدد، الأرقام التسلسلية، الضمان، الصيانة */
+/* المثلث · نظام مستودع العدد الإنشائية — تفاصيل العدد، الأرقام التسلسلية، الضمان، الصيانة */
 'use strict';
 
 const toolSub = m => [m.brand, m.model, m.size].filter(Boolean).join(' · ');
@@ -68,7 +68,7 @@ function editMaterial(id, preset = {}) {
       <div class="field" style="grid-column:span 2"><label>الباركود</label><div class="row" style="flex-wrap:nowrap"><input class="inp mono" name="barcode" value="${esc(m.barcode)}" dir="ltr" placeholder="امسح باركود العلبة هنا أو ولّد رقماً"><button type="button" class="btn icon" data-gen title="توليد">${ICO('sparkle')}</button><button type="button" class="btn icon" data-cam title="كاميرا">${ICO('camera')}</button></div><div id="bc-prev" style="height:40px;margin-top:6px;max-width:220px"></div></div>
       ${can('cost') ? `<div class="field"><label>سعر الكلفة</label><input class="inp num" name="cost" value="${m.cost}" inputmode="decimal"></div>` : ''}
       <div class="field"><label>سعر المفرد</label><input class="inp num" name="price" value="${m.price}" inputmode="decimal"></div>
-      <div class="field"><label>سعر الجملة / الورش</label><input class="inp num" name="wprice" value="${m.wprice}" inputmode="decimal"></div>
+      <div class="field"><label>سعر الجملة / المقاول</label><input class="inp num" name="wprice" value="${m.wprice}" inputmode="decimal"></div>
       ${id ? `<div class="field"><label>المخزون الحالي</label><input class="inp num" value="${m.stock}" disabled></div>` : `<div class="field"><label>الرصيد الافتتاحي</label><input class="inp num" name="stock" value="${m.stock}" inputmode="decimal"></div>`}
       <div class="field"><label>حد إعادة الطلب</label><input class="inp num" name="min" value="${m.min}" inputmode="decimal"></div>
       <div class="field"><label>المورد / الوكيل</label><select class="sel" name="supplierId"><option value="">—</option>${db.suppliers.map(s => `<option value="${s.id}" ${s.id === m.supplierId ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
@@ -223,27 +223,22 @@ function releaseSerials(inv, mid, qty) {
 function warrantyCard(r) {
   if (!r) return;
   const m = matById(r.mid), w = warrantyState(r), inv = r.invId && byId('invoices', r.invId), c = r.customerId && custById(r.customerId);
-  const tks = db.tickets.filter(t => t.sn && t.sn.toUpperCase() === r.sn.toUpperCase());
   const md = modal({
     title: 'التحقق من الضمان', size: 'narrow',
     body: `<div class="warranty ${w.k}"><div class="w-ico">${ICO(w.k === 'on' ? 'shield' : w.k === 'off' ? 'warn' : 'box')}</div><div><b>${esc(w.t)}</b><div class="mono" style="direction:ltr;text-align:right">${esc(r.sn)}</div></div></div>
       <table class="tbl specs" style="margin-top:12px"><tr><th>العدّة</th><td>${esc(m ? m.name : '—')}<div class="t-sub">${esc(m ? toolSub(m) : '')}</div></td></tr>
       ${r.status === 'sold' ? `<tr><th>الزبون</th><td>${esc(c ? c.name : 'زبون نقدي')}</td></tr><tr><th>تاريخ البيع</th><td>${fdate(r.soldAt)}</td></tr><tr><th>فاتورة</th><td>${inv ? `رقم ${inv.no}` : '—'}</td></tr><tr><th>نهاية الضمان</th><td>${r.warrantyUntil ? fdate(r.warrantyUntil) : 'بدون ضمان'}</td></tr>` : ''}
-      <tr><th>تذاكر صيانة سابقة</th><td>${tks.length ? tks.map(t => `<a href="#" data-tk="${t.id}">#${t.no}</a> (${(TKT_STATES.find(s => s[0] === t.state) || [])[1]})`).join('، ') : 'لا يوجد'}</td></tr></table>`,
-    foot: `${can('repairs') && r.status === 'sold' ? `<button class="btn pri" data-new>${ICO('wrench')} فتح تذكرة صيانة</button>` : ''}${inv ? `<button class="btn" data-inv>${ICO('inv')} الفاتورة</button>` : ''}${m ? `<button class="btn ghost" data-tool>${ICO('box')} بطاقة العدّة</button>` : ''}`
+      </table>`,
+    foot: `${inv ? `<button class="btn" data-inv>${ICO('inv')} الفاتورة</button>` : ''}${m ? `<button class="btn ghost" data-tool>${ICO('box')} بطاقة العدّة</button>` : ''}`
   });
-  const n = $('[data-new]', md.el); if (n) n.onclick = () => { md.close(); ticketModal(null, { sn: r.sn }); };
   const i = $('[data-inv]', md.el); if (i) i.onclick = () => { md.close(); viewInvoice(inv.id); };
   const t = $('[data-tool]', md.el); if (t) t.onclick = () => { md.close(); quickMaterial(m); };
-  $$('[data-tk]', md.el).forEach(a => a.onclick = e => { e.preventDefault(); md.close(); ticketView(a.dataset.tk); });
 }
 /* توجيه المسح: الأرقام التسلسلية وتذاكر الصيانة قبل الباركود العادي */
 const baseOnScan = window.onScanCode;
 window.onScanCode = function (code) {
   code = String(code || '').trim();
   if (!Scanner.hook && !$('.modal-bg')) {
-    const tk = /^TKT-(\d+)$/i.exec(code);
-    if (tk) { const t = db.tickets.find(x => x.no === +tk[1]); if (t) return ticketView(t.id); }
     if (!db.materials.some(m => m.barcode === code)) { const r = snFind(code); if (r) { beep(); return warrantyCard(r); } }
   }
   return baseOnScan(code);
@@ -252,8 +247,7 @@ const baseStationHandle = Station.handle.bind(Station);
 Station.handle = function (code) {
   code = String(code || '').trim(); if (!code) return;
   if (!db.materials.some(m => m.barcode === code)) {
-    const tk = /^TKT-(\d+)$/i.exec(code), r = snFind(code);
-    if (tk && ST.mode === 'lookup') { const t = db.tickets.find(x => x.no === +tk[1]); if (t) { beep(); this.push(code, null, true, `تذكرة صيانة ${t.no}`); this.draw(); return ticketView(t.id); } }
+    const r = snFind(code);
     if (r) {
       const m = matById(r.mid);
       if (ST.mode === 'lookup') { beep(); ST.last = r.mid; this.push(code, r.mid, true, `${m ? m.name : ''} · رقم تسلسلي`); this.draw(); return warrantyCard(r); }
@@ -263,128 +257,13 @@ Station.handle = function (code) {
   return baseStationHandle(code);
 };
 
-/* ===================== الصيانة والضمان ===================== */
-const TkF = { q: '' };
-const tkState = k => TKT_STATES.find(s => s[0] === k) || TKT_STATES[0];
-Views.repairs = {
-  dim: () => `${db.tickets.filter(t => t.state !== 'done').length} تذكرة مفتوحة · امسح الرقم التسلسلي للتحقق من الضمان`,
-  render() {
-    const q = TkF.q.toLowerCase();
-    const all = db.tickets.filter(t => !q || String(t.no) === q || (t.name || '').toLowerCase().includes(q) || (t.sn || '').toLowerCase().includes(q.toLowerCase()) || (t.item || '').toLowerCase().includes(q) || (t.phone || '').includes(q));
-    return `<div class="toolbar"><div class="search">${ICO('search')}<input class="inp" id="tk-q" placeholder="رقم التذكرة، الزبون، الرقم التسلسلي…" value="${esc(TkF.q)}"></div>
-      <button class="btn" data-act="tkCheck">${ICO('shield')} تحقق من ضمان</button><span class="spacer"></span><button class="btn pri" data-act="tkNew">${ICO('plus')} استلام عدّة للصيانة</button></div>
-      <div class="board b4">${TKT_STATES.map(([k, t, col]) => {
-        const items = all.filter(x => x.state === k).sort((a, b) => b.at - a.at).slice(0, k === 'done' ? 10 : 100);
-        return `<div class="lane"><div class="lane-h"><i style="background:${col}"></i>${t}<span class="n">${all.filter(x => x.state === k).length}</span></div>
-          ${items.map(x => `<div class="dcard" style="cursor:pointer" data-act="tkView" data-id="${x.id}"><div class="row"><b>#${x.no}</b>${x.warranty ? '<span class="chip ok plain">ضمان</span>' : ''}<span class="spacer"></span><span class="muted" style="font-size:12px">${fdate(x.date)}</span></div>
-            <div class="meta"><span>${ICO('wrench')}${esc(x.item)}</span><span>${ICO('user')}${esc(x.name || '—')}</span><span>${ICO('warn')}${esc(x.problem)}</span>${x.due && k !== 'done' ? `<span class="${x.due < today() ? 'danger-t' : ''}">${ICO('log')}الموعد ${fdate(x.due)}</span>` : ''}</div>
-            <div class="row"><span class="t-sub">${x.tech ? esc(userName(x.tech)) : 'بدون فني'}</span><span class="spacer"></span><b class="num">${x.warranty && !x.cost ? 'مجاناً' : fmt(x.cost || x.est)}</b></div></div>`).join('') || `<div class="empty" style="padding:24px 10px">لا يوجد</div>`}</div>`;
-      }).join('')}</div>`;
-  },
-  after() { const q = $('#tk-q'); q.addEventListener('input', debounce(() => { TkF.q = q.value.trim(); Shell.refresh(); const n = $('#tk-q'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250)); }
+/* ===================== التحقق من رقم تسلسلي ===================== */
+ACTS.snCheck = () => {
+  const md = modal({ title: 'التحقق من رقم تسلسلي وضمان', size: 'narrow', body: `<div class="scan-field sm"><div class="laser"></div>${ICO('scan')}<input id="wc-in" class="mono" dir="ltr" placeholder="امسح أو اكتب الرقم التسلسلي ثم Enter" autocomplete="off"></div>` });
+  const go = v => { const r = snFind(v); if (!r) { beep(320); return toast('الرقم التسلسلي غير مسجل في النظام', 'warn'); } beep(); md.close(); warrantyCard(r); };
+  $('#wc-in', md.el).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); go(e.target.value); } });
+  Scanner.hook = go; const oc = md.onClose; md.onClose = () => { Scanner.hook = null; oc && oc(); };
 };
-function ticketModal(id, preset = {}) {
-  const t = id ? byId('tickets', id) : { customerId: '', name: '', phone: '', mid: '', item: '', sn: '', problem: '', received: '', warranty: false, est: db.settings.repairFee || 0, tech: Session.user.id, due: addDays(today(), 3), ...preset };
-  const md = modal({
-    title: id ? `تعديل التذكرة ${t.no}` : 'استلام عدّة للصيانة', size: 'wide',
-    body: `<div class="scan-field sm" style="margin-bottom:14px"><div class="laser"></div>${ICO('scan')}<input id="tk-sn" class="mono" dir="ltr" placeholder="امسح الرقم التسلسلي لملء البيانات والتحقق من الضمان…" value="${esc(t.sn)}" autocomplete="off"></div>
-      <div id="tk-w" style="margin-bottom:14px"></div>
-      <div class="form-grid c3">
-        <div class="field"><label>الزبون</label><select class="sel" name="customerId"><option value="">زبون غير مسجل</option>${db.customers.map(c => `<option value="${c.id}" ${c.id === t.customerId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
-        <div class="field"><label>الاسم</label><input class="inp" name="name" value="${esc(t.name)}"></div><div class="field"><label>الهاتف (واتساب)</label><input class="inp" name="phone" value="${esc(t.phone)}" dir="ltr"></div>
-        <div class="field" style="grid-column:span 2"><label>العدّة</label><input class="inp" name="item" value="${esc(t.item)}" list="tk-items" placeholder="اختر من الأصناف أو اكتب الوصف"><datalist id="tk-items">${db.materials.map(m => `<option value="${esc(m.name)} — ${esc(toolSub(m))}">`).join('')}</datalist></div>
-        <div class="field"><label>الفني المسؤول</label><select class="sel" name="tech">${db.users.filter(u => u.active !== false).map(u => `<option value="${u.id}" ${u.id === t.tech ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select></div>
-        <div class="field" style="grid-column:span 2"><label>وصف العطل</label><input class="inp" name="problem" value="${esc(t.problem)}" placeholder="مثال: لا يشتغل، الفحمات، البطارية لا تشحن"></div>
-        <div class="field"><label>ما تم استلامه</label><input class="inp" name="received" value="${esc(t.received)}" placeholder="العدّة مع الحقيبة والشاحن"></div>
-        <div class="field"><label>الكلفة التقديرية</label><input class="inp num" name="est" value="${t.est || ''}" inputmode="decimal"></div><div class="field"><label>موعد التسليم المتوقع</label><input class="inp" type="date" name="due" value="${t.due}"></div>
-        <label class="check" style="align-self:end;margin-bottom:10px"><input type="checkbox" name="warranty" ${t.warranty ? 'checked' : ''}> ضمن الضمان (بدون كلفة)</label></div>`,
-    foot: `<button class="btn pri" data-ok>${ICO('check')} حفظ${id ? '' : ' وطباعة الوصل'}</button>${id ? '' : `<button class="btn" data-ok data-np="1">حفظ بدون طباعة</button>`}`
-  });
-  const snIn = $('#tk-sn', md.el);
-  const fillSn = () => {
-    const r = snFind(snIn.value), box = $('#tk-w', md.el); if (!snIn.value.trim()) { box.innerHTML = ''; return; }
-    if (!r) { box.innerHTML = `<div class="warranty none"><div class="w-ico">${ICO('info')}</div><div><b>رقم غير مسجل في النظام</b><div class="t-sub">العدّة لم تُبع من المحل أو لم يُسجّل رقمها، تُعامل بدون ضمان.</div></div></div>`; return; }
-    const w = warrantyState(r), m = matById(r.mid), c = r.customerId && custById(r.customerId);
-    box.innerHTML = `<div class="warranty ${w.k}"><div class="w-ico">${ICO(w.k === 'on' ? 'shield' : 'warn')}</div><div><b>${esc(w.t)}</b><div class="t-sub">${esc(m ? m.name : '')} · بيعت ${r.soldAt ? fdate(r.soldAt) : '—'}${c ? ` إلى ${esc(c.name)}` : ''}</div></div></div>`;
-    if (m) $('[name=item]', md.el).value = `${m.name} — ${toolSub(m)}`;
-    if (c) { $('[name=customerId]', md.el).value = c.id; $('[name=name]', md.el).value = c.name; $('[name=phone]', md.el).value = c.phone || ''; }
-    $('[name=warranty]', md.el).checked = w.k === 'on'; if (w.k === 'on') $('[name=est]', md.el).value = 0;
-  };
-  snIn.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); beep(); fillSn(); $('[name=problem]', md.el).focus(); } });
-  snIn.addEventListener('change', fillSn); if (t.sn) fillSn();
-  Scanner.hook = code => { snIn.value = code; beep(); fillSn(); }; const oc = md.onClose; md.onClose = () => { Scanner.hook = null; oc && oc(); };
-  $('[name=customerId]', md.el).onchange = e => { const c = custById(e.target.value); if (c) { $('[name=name]', md.el).value = c.name; $('[name=phone]', md.el).value = c.phone || ''; } };
-  $$('[data-ok]', md.el).forEach(b => b.onclick = () => {
-    const v = formVals(md.el); v.sn = snIn.value.trim().toUpperCase();
-    if (!v.name && !v.customerId) return toast('أدخل اسم الزبون', 'warn');
-    if (!v.item) return toast('أدخل العدّة', 'warn');
-    if (!v.problem) return toast('أدخل وصف العطل', 'warn');
-    const r = v.sn && snFind(v.sn), mid = r ? r.mid : ((db.materials.find(m => v.item.startsWith(m.name)) || {}).id || '');
-    const rec = { customerId: v.customerId || null, name: v.name || custName(v.customerId), phone: v.phone, item: v.item, sn: v.sn, mid, problem: v.problem, received: v.received, warranty: !!v.warranty, est: num(v.est), tech: v.tech, due: v.due };
-    let tk;
-    if (id) { Object.assign(t, rec); tk = t; logAct('تعديل تذكرة صيانة', `#${t.no}`); }
-    else { tk = { id: uid(), no: nextNo('tkt'), date: today(), at: Date.now(), ...rec, cost: 0, paid: 0, state: 'recv', notes: '', log: [{ at: Date.now(), state: 'recv', user: Session.user.id }] }; db.tickets.unshift(tk); logAct('تذكرة صيانة', `#${tk.no} · ${rec.name} · ${rec.item}`); }
-    saveDb(); md.close(); toast(`التذكرة ${tk.no} محفوظة`); Shell.refresh();
-    if (!id && !b.dataset.np) printTicket(tk.id);
-  });
-}
-function ticketHTML(t) {
-  const code = `TKT-${pad(t.no, 5)}`;
-  return `<div class="pr-h"><div>${brandHTML(db.settings.company)}<div style="margin-top:6px;font-size:11.5px;color:#555">${esc(db.settings.address)}${db.settings.phone ? ` · هاتف ${esc(db.settings.phone)}` : ''}</div></div>
-    <div style="text-align:left"><p class="pr-title">وصل استلام صيانة</p><div style="width:170px;margin-top:4px">${barcodeSVG(code, { h: 34 })}</div></div></div>
-    <div class="pr-meta"><div><b>رقم التذكرة:</b> ${t.no}</div><div><b>التاريخ:</b> ${fdate(t.date)}</div><div><b>الزبون:</b> ${esc(t.name)}</div><div><b>الهاتف:</b> ${esc(t.phone || '—')}</div>
-      <div><b>العدّة:</b> ${esc(t.item)}</div><div><b>الرقم التسلسلي:</b> ${esc(t.sn || '—')}</div><div><b>العطل:</b> ${esc(t.problem)}</div><div><b>المستلم:</b> ${esc(t.received || '—')}</div>
-      <div><b>الضمان:</b> ${t.warranty ? 'ضمن الضمان' : 'خارج الضمان'}</div><div><b>الموعد المتوقع:</b> ${fdate(t.due)}</div><div><b>الكلفة ${t.cost ? '' : 'التقديرية'}:</b> ${t.warranty && !t.cost ? 'مجاناً' : moneyT(t.cost || t.est)}</div>${t.paid ? `<div><b>المدفوع:</b> ${moneyT(t.paid)}</div>` : ''}</div>
-    <p style="font-size:11.5px;color:#555">يرجى إحضار هذا الوصل عند الاستلام. العدد غير المستلمة بعد 60 يوماً من إشعار الجاهزية لا يتحمل المحل مسؤوليتها. الضمان لا يشمل سوء الاستخدام أو الكسر.</p>
-    <div class="pr-sign"><div>توقيع الزبون</div><div>الفني: ${esc(userName(t.tech))}</div></div><div class="pr-foot">المثلث · ${APP.name} — حقوق البرمجة © أصيل الصافي</div>`;
-}
-function printTicket(id) { const t = byId('tickets', id); if (t) printHTML(ticketHTML(t)); }
-function ticketView(id) {
-  const t = byId('tickets', id); if (!t) return;
-  const [, stT] = tkState(t.state), idx = TKT_STATES.findIndex(s => s[0] === t.state), next = TKT_STATES[idx + 1];
-  const md = modal({
-    title: `تذكرة صيانة #${t.no} <span class="chip acc plain">${stT}</span>`, size: 'wide',
-    body: `<div class="steps">${TKT_STATES.map(([k, n], i) => `<div class="${i <= idx ? 'on' : ''}"><i>${i < idx ? ICO('check') : i + 1}</i><span>${n}</span></div>`).join('')}</div>
-      <div class="grid g2" style="align-items:start;margin-top:16px"><table class="tbl specs">
-        <tr><th>الزبون</th><td>${esc(t.name)}<div class="t-sub" dir="ltr" style="text-align:right">${esc(t.phone || '')}</div></td></tr><tr><th>العدّة</th><td>${esc(t.item)}</td></tr><tr><th>الرقم التسلسلي</th><td class="mono">${esc(t.sn || '—')}</td></tr>
-        <tr><th>العطل</th><td>${esc(t.problem)}</td></tr><tr><th>المستلم</th><td>${esc(t.received || '—')}</td></tr><tr><th>الضمان</th><td>${t.warranty ? '<span class="chip ok">ضمن الضمان</span>' : '<span class="chip plain">خارج الضمان</span>'}</td></tr>
-        <tr><th>الفني</th><td>${esc(userName(t.tech))}</td></tr><tr><th>الموعد</th><td>${fdate(t.due)}</td></tr></table>
-      <div class="stack" style="gap:12px"><div class="form-grid"><div class="field"><label>كلفة الصيانة النهائية</label><input class="inp num" id="tk-cost" value="${t.cost || (t.warranty ? 0 : t.est) || ''}" inputmode="decimal" ${t.state === 'done' ? 'disabled' : ''}></div>
-        <div class="field"><label>المدفوع</label><input class="inp num" value="${fmt(t.paid || 0)}" disabled></div></div>
-        <div class="field"><label>ملاحظات الفني (ما تم إصلاحه، القطع المستبدلة)</label><textarea class="txt" id="tk-notes" rows="4">${esc(t.notes || '')}</textarea></div>
-        <div class="card"><div class="card-h"><h3>${ICO('log')} سجل التذكرة</h3></div><div class="list">${(t.log || []).slice().reverse().map(l => `<div class="li"><div class="l-main"><b>${tkState(l.state)[1]}</b><span>${esc(userName(l.user))}</span></div><div class="l-end t-sub">${ftime(l.at)}</div></div>`).join('')}</div></div></div></div>`,
-    foot: `${next && next[0] !== 'done' ? `<button class="btn pri" data-next>${ICO('check')} نقل إلى: ${next[1]}</button>` : ''}
-      ${t.state === 'ready' ? `<button class="btn brass" data-deliver>${ICO('cash')} تسليم واستلام المبلغ</button>` : ''}
-      ${t.state === 'ready' && t.phone ? `<button class="btn" data-notify>${ICO('wa')} إشعار الزبون بالجاهزية</button>` : ''}
-      <button class="btn" data-save>حفظ</button><button class="btn" data-print>${ICO('print')} الوصل</button>${t.state !== 'done' ? `<button class="btn ghost" data-edit>${ICO('edit')} تعديل</button>` : ''}`
-  });
-  const keep = () => { if (t.state !== 'done') t.cost = num($('#tk-cost', md.el).value); t.notes = $('#tk-notes', md.el).value.trim(); };
-  const move = st => { keep(); t.state = st; (t.log = t.log || []).push({ at: Date.now(), state: st, user: Session.user.id }); logAct('تحديث تذكرة صيانة', `#${t.no} → ${tkState(st)[1]}`); saveDb(); md.close(); Shell.refresh(); };
-  const nx = $('[data-next]', md.el); if (nx) nx.onclick = async () => { move(next[0]); if (next[0] === 'ready' && t.phone && await confirmBox(`أصبحت العدّة جاهزة. هل تريد إشعار <b>${esc(t.name)}</b> عبر واتساب؟`, { ok: 'إرسال إشعار' })) notifyTicket(t); };
-  $('[data-save]', md.el).onclick = () => { keep(); saveDb(); md.close(); toast('حُفظت التذكرة'); Shell.refresh(); };
-  $('[data-print]', md.el).onclick = () => { keep(); saveDb(); printTicket(t.id); };
-  const ed = $('[data-edit]', md.el); if (ed) ed.onclick = () => { keep(); md.close(); ticketModal(t.id); };
-  const nt = $('[data-notify]', md.el); if (nt) nt.onclick = () => { keep(); saveDb(); notifyTicket(t); };
-  const dl = $('[data-deliver]', md.el); if (dl) dl.onclick = async () => {
-    keep(); const due = round2((t.cost || 0) - (t.paid || 0));
-    if (!await confirmBox(`تسليم العدّة إلى <b>${esc(t.name)}</b>${due > 0 ? ` واستلام <b>${moneyT(due)}</b> نقداً` : ' (بدون مبلغ)'}؟`, { ok: 'تسليم' })) return;
-    if (due > 0) { db.payments.unshift({ id: uid(), no: nextNo('rec'), type: 'in', party: 'r', partyId: t.customerId, amount: due, method: 'نقدي', note: `صيانة تذكرة ${t.no} — ${t.name}`, date: today(), at: Date.now(), alloc: [], user: Session.user.id }); t.paid = round2((t.paid || 0) + due); }
-    move('done'); toast('سُلّمت العدّة');
-  };
-}
-function notifyTicket(t) {
-  const row = { c: { id: t.customerId, name: t.name, phone: t.phone }, amount: 0, open: [], oldest: null, lateDays: 0, extra: { 'العدة': t.item.split(' — ')[0], 'رقم_التذكرة': t.no, 'كلفة_الصيانة': t.warranty && !t.cost ? 'مجاناً ضمن الضمان' : moneyT(t.cost || t.est) } };
-  WA.send(row.c, fillTemplate(db.settings.templates.ready, row), `صيانة ${t.no}`);
-}
-Object.assign(ACTS, {
-  tkNew: () => ticketModal(null), tkView: el => ticketView(el.dataset.id),
-  tkCheck: () => {
-    const md = modal({ title: 'التحقق من الضمان', size: 'narrow', body: `<div class="scan-field sm"><div class="laser"></div>${ICO('scan')}<input id="wc-in" class="mono" dir="ltr" placeholder="امسح أو اكتب الرقم التسلسلي ثم Enter" autocomplete="off"></div>` });
-    const go = v => { const r = snFind(v); if (!r) { beep(320); return toast('الرقم التسلسلي غير مسجل في النظام', 'warn'); } beep(); md.close(); warrantyCard(r); };
-    $('#wc-in', md.el).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); go(e.target.value); } });
-    Scanner.hook = go; const oc = md.onClose; md.onClose = () => { Scanner.hook = null; oc && oc(); };
-  }
-});
 const baseRenderTiles = window.renderTiles;
 window.renderTiles = function () { baseRenderTiles(); loadImgs($('#pos-tiles')); };
 ACTS.toolCard = el => quickMaterial(matById(el.dataset.id));
