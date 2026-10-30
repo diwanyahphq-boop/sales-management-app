@@ -8,14 +8,15 @@ const PERMS = [
   ['materials', 'المواد والمخزن'], ['purchases', 'المشتريات'], ['customers', 'الزبائن'], ['suppliers', 'الموردون'],
   ['dues', 'القوائم المستحقة'], ['payments', 'سندات القبض والصرف'], ['messages', 'الرسائل'], ['docs', 'الماسح والمستندات'],
   ['reports', 'التقارير'], ['users', 'المستخدمون'], ['log', 'سجل العمليات'], ['settings', 'الإعدادات'],
+  ['scanner', 'محطة الماسح'], ['chat', 'المحادثات الداخلية'], ['cashbox', 'الصندوق والمصروفات'], ['returns', 'المرتجعات'],
   ['cost', 'رؤية الكلفة والأرباح'], ['price', 'تعديل السعر والخصم'], ['void', 'الإلغاء والحذف']
 ];
 const ALL_PERMS = PERMS.map(p => p[0]);
 const ROLES = {
   admin: { name: 'مدير', perms: ALL_PERMS },
-  acct: { name: 'محاسب', perms: ['dash', 'invoices', 'customers', 'suppliers', 'dues', 'payments', 'messages', 'docs', 'reports', 'cost', 'purchases'] },
-  sales: { name: 'مبيعات', perms: ['dash', 'pos', 'invoices', 'deliveries', 'customers', 'dues', 'messages', 'payments'] },
-  store: { name: 'أمين مخزن', perms: ['dash', 'materials', 'purchases', 'deliveries', 'docs', 'suppliers'] }
+  acct: { name: 'محاسب', perms: ['dash', 'invoices', 'customers', 'suppliers', 'dues', 'payments', 'messages', 'docs', 'reports', 'cost', 'purchases', 'cashbox', 'chat', 'returns'] },
+  sales: { name: 'مبيعات', perms: ['dash', 'pos', 'invoices', 'deliveries', 'customers', 'dues', 'messages', 'payments', 'scanner', 'chat', 'returns'] },
+  store: { name: 'أمين مخزن', perms: ['dash', 'materials', 'purchases', 'deliveries', 'docs', 'suppliers', 'scanner', 'chat'] }
 };
 const UNITS = ['كيس', 'طن', 'قطعة', 'م³', 'م²', 'متر', 'لفة', 'سطل', 'ألف طابوقة', 'كارتون', 'حمل'];
 const DOC_KINDS = ['فاتورة مورد', 'وصل استلام', 'عقد', 'مستمسك زبون', 'مخطط موقع', 'أخرى'];
@@ -32,12 +33,13 @@ function emptyDb() {
     settings: {
       company: 'مخازن المثلث للمواد الإنشائية', phone: '', address: '', currency: 'د.ع', tax: 0, country: '964',
       blockNegative: true, invoiceNote: 'المواد المباعة لا ترد بعد خروجها من المخزن إلا بموافقة الإدارة.', dueDays: 30,
-      templates: { ...DEFAULT_TEMPLATES }
+      templates: { ...DEFAULT_TEMPLATES },
+      wa: { mode: 'link', token: '', phoneId: '', apiType: 'template', template: '', lang: 'ar' }
     },
     users: [], categories: ['اسمنت', 'حديد', 'طابوق وبلوك', 'رمل وحصى', 'جص ومواد لياسة', 'بلاط وسيراميك', 'صحيات', 'كهربائيات', 'دهانات', 'عوازل', 'أخشاب'],
     materials: [], customers: [], suppliers: [], invoices: [], purchases: [], payments: [], movements: [],
-    messages: [], docs: [], notices: [], log: [],
-    seq: { inv: 0, quo: 0, pur: 0, rec: 0, pay: 0, bar: 100000 }
+    messages: [], docs: [], notices: [], log: [], expenses: [], closings: [],
+    seq: { inv: 0, quo: 0, pur: 0, rec: 0, pay: 0, exp: 0, bar: 100000 }
   };
 }
 
@@ -46,7 +48,7 @@ let db = (() => {
   if (!d) return emptyDb();
   const base = emptyDb();
   for (const k of Object.keys(base)) if (d[k] === undefined) d[k] = base[k];
-  d.settings = { ...base.settings, ...d.settings, templates: { ...DEFAULT_TEMPLATES, ...(d.settings || {}).templates } };
+  d.settings = { ...base.settings, ...d.settings, templates: { ...DEFAULT_TEMPLATES, ...(d.settings || {}).templates }, wa: { ...base.settings.wa, ...(d.settings || {}).wa } };
   d.seq = { ...base.seq, ...d.seq };
   return d;
 })();
@@ -66,7 +68,9 @@ const moneyT = n => `${fmt(n)} ${cur()}`;
 const nextNo = k => { db.seq[k] = (db.seq[k] || 0) + 1; return db.seq[k]; };
 const docNo = (prefix, n) => `${prefix}-${pad(n, 5)}`;
 
-const remaining = d => round2((d.total || 0) - (d.paid || 0));
+const remaining = d => round2((d.total || 0) - (d.returned || 0) - (d.paid || 0));
+const invNet = d => round2((d.total || 0) - (d.returned || 0));
+const retQty = (inv, mid) => (inv.returns || []).reduce((s, r) => s + r.lines.filter(l => l.mid === mid).reduce((a, l) => a + l.qty, 0), 0);
 function invStatus(inv) {
   if (inv.kind === 'quote') return inv.converted ? { k: 'conv', t: 'تم تحويله', c: 'acc' } : { k: 'quote', t: 'عرض سعر', c: 'brass' };
   if (inv.void) return { k: 'void', t: 'ملغاة', c: 'plain' };
@@ -239,5 +243,7 @@ function seedDemo() {
   });
   const q = db.invoices[0]; q.sub = round2(q.lines.reduce((a, l) => a + l.qty * l.price, 0)); q.total = q.sub + q.delivery;
   db.notices.push({ id: uid(), at: Date.now(), from: admin.id, to: 'all', text: 'مرحباً بكم في نظام المثلث للمواد الإنشائية. يرجى مراجعة القوائم المستحقة يومياً وإرسال التذكيرات.', readBy: [] });
+  [['وقود ونقل', 45000, 0], ['رواتب', 750000, 3], ['كهرباء ومولدة', 120000, 6], ['ضيافة', 15000, 1], ['صيانة', 60000, 9]].forEach(([cat, amount, back]) =>
+    db.expenses.unshift({ id: uid(), no: nextNo('exp'), date: addDays(today(), -back), at: Date.now() - back * 86400000, cat, amount, note: '', user: admin.id }));
   logAct('إضافة بيانات تجريبية', `${db.materials.length} مادة، ${db.customers.length} زبائن`);
 }

@@ -10,7 +10,7 @@ Views.customers = {
     const rows = db.customers.filter(c => (!CustF.type || c.type === CustF.type) && (!q || c.name.toLowerCase().includes(q) || (c.phone || '').includes(q) || (c.site || '').toLowerCase().includes(q)));
     return `<div class="toolbar"><div class="search">${ICO('search')}<input class="inp" id="c-q" placeholder="الاسم أو الهاتف أو الموقع" value="${esc(CustF.q)}"></div>
       <div class="seg">${[['', 'الكل'], ['مقاول', 'مقاولون'], ['شركة', 'شركات'], ['فرد', 'أفراد']].map(([k, t]) => `<button class="${CustF.type === k ? 'on' : ''}" data-act="custType" data-t="${k}">${t}</button>`).join('')}</div>
-      <span class="spacer"></span><button class="btn pri" data-act="newCust">${ICO('plus')} زبون جديد</button></div>
+      <span class="spacer"></span><button class="btn" data-act="csvCustomers">${ICO('sheet')} Excel</button><button class="btn pri" data-act="newCust">${ICO('plus')} زبون جديد</button></div>
       <div class="card"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>الزبون</th><th>النوع</th><th>الهاتف</th><th class="n">الفواتير</th><th class="n">الرصيد المستحق</th><th>سقف الدين</th><th></th></tr></thead><tbody>
       ${rows.map(c => {
         const b = custBalance(c.id), n = custInvoices(c.id).length, pct = c.limit ? Math.min(100, b / c.limit * 100) : 0;
@@ -54,6 +54,7 @@ function statement(cid, isSup = false) {
   const pays = db.payments.filter(x => x.partyId === cid && x.party === (isSup ? 's' : 'c'));
   const rows = [
     ...docs.map(d => ({ at: d.at, date: d.date, t: `${isSup ? 'فاتورة شراء' : 'فاتورة بيع'} رقم ${d.no}`, dr: d.total, cr: 0 })),
+    ...docs.flatMap(d => (d.returns || []).map(r => ({ at: r.at, date: r.date, t: `مرتجع من الفاتورة ${d.no}`, dr: 0, cr: r.amount }))),
     ...pays.map(x => ({ at: x.at, date: x.date, t: x.type === 'in' ? `سند قبض رقم ${x.no}${x.note ? ' — ' + x.note : ''}` : `سند صرف رقم ${x.no}${x.note ? ' — ' + x.note : ''}`, dr: x.type === 'out' && !isSup ? x.amount : 0, cr: (isSup ? x.type === 'out' : x.type === 'in') ? x.amount : 0 }))
   ].sort((a, b) => a.at - b.at);
   // المبالغ المرتجعة من فاتورة ملغاة تقابلها دفعة ملغاة، لذلك نستبعد الفواتير الملغاة ومبالغها
@@ -149,7 +150,7 @@ Views.dues = {
       <div class="tabs"><button class="${cTab ? 'on' : ''}" data-act="dueTab" data-t="c">ديون الزبائن (${rows.length})</button><button class="${!cTab ? 'on' : ''}" data-act="dueTab" data-t="s">مستحقات الموردين (${sup.length})</button></div>
       ${cTab ? `<div class="toolbar"><div class="seg">${[['', 'الكل'], ['over', 'متأخرة'], ['soon', 'خلال أسبوع'], ['later', 'لاحقة']].map(([k, t]) => `<button class="${DueF.b === k ? 'on' : ''}" data-act="dueB" data-b="${k}">${t}</button>`).join('')}</div>
         <span class="spacer"></span>${can('messages') ? `<button class="btn brass" data-act="dueSend" ${DueF.sel.size ? '' : 'disabled'}>${ICO('send')} إرسال تذكير للمحدد (${DueF.sel.size})</button>
-        <button class="btn" data-act="dueSendAll" ${list.length ? '' : 'disabled'}>${ICO('wa')} تذكير الكل (${list.length})</button>` : ''}<button class="btn" data-act="duePrint">${ICO('print')} طباعة القائمة</button></div>
+        <button class="btn" data-act="dueSendAll" ${list.length ? '' : 'disabled'}>${ICO('wa')} تذكير الكل (${list.length})</button>` : ''}<button class="btn" data-act="duePrint">${ICO('print')} طباعة القائمة</button><button class="btn" data-act="csvDues">${ICO('sheet')} Excel</button></div>
       <div class="card"><div class="tbl-wrap"><table class="tbl"><thead><tr><th style="width:36px"><input type="checkbox" class="check" id="due-all" ${list.length && DueF.sel.size === list.length ? 'checked' : ''} style="width:17px;height:17px;accent-color:var(--accent)"></th><th>الزبون</th><th class="n">فواتير مفتوحة</th><th>أقدم استحقاق</th><th class="n">المتأخر</th><th class="n">مجموع المستحق</th><th>آخر تذكير</th><th></th></tr></thead><tbody>
         ${list.map(r => `<tr><td><input type="checkbox" data-sel="${r.c.id}" ${DueF.sel.has(r.c.id) ? 'checked' : ''} style="width:17px;height:17px;accent-color:var(--accent)"></td>
           <td><div class="t-main">${esc(r.c.name)}</div><div class="t-sub mono" dir="ltr" style="text-align:right">${esc(r.c.phone || 'لا يوجد رقم')}</div></td><td class="n">${r.open.length}</td><td>${bChip(r)}</td>
@@ -189,29 +190,27 @@ Object.assign(ACTS, {
 function msgLink(channel, phone, text) {
   return channel === 'sms' ? `sms:+${phone}?body=${encodeURIComponent(text)}` : `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
 }
-function logMessage(c, channel, text, ref = '') {
-  db.messages.unshift({ id: uid(), at: Date.now(), partyId: c ? c.id : null, to: c ? c.name : '', phone: c ? c.phone : '', channel, text, ref, user: Session.user.id });
+function logMessage(c, channel, text, ref = '', status = '', err = '') {
+  db.messages.unshift({ id: uid(), at: Date.now(), partyId: c ? c.id : null, to: c ? c.name : '', phone: c ? c.phone : '', channel, text, ref, status, err, user: Session.user.id });
   if (db.messages.length > 3000) db.messages.length = 3000;
 }
-function sendOne(c, text, ref) {
-  const ph = intlPhone(c.phone); if (!ph) return toast('لا يوجد رقم هاتف لهذا الزبون', 'warn');
-  openLink(msgLink('wa', ph, text)); logMessage(c, 'wa', text, ref); saveDb(); toast('فُتح واتساب، اضغط إرسال هناك');
-}
-const CH_NAME = { wa: 'واتساب', sms: 'رسالة SMS', copy: 'نسخ' };
+function sendOne(c, text, ref) { return WA.send(c, text, ref); }
+const CH_NAME = { api: 'واتساب مباشر', wa: 'واتساب', sms: 'رسالة SMS', copy: 'نسخ' , 'wa-api': 'واتساب مباشر' };
 function composeMessages(rows, tplKey = 'due') {
   if (!rows.length) return toast('لا يوجد مستلمون', 'warn');
   const T = db.settings.templates;
-  let channel = lsGet('mth-bld-ch', 'wa'), text = tplKey === 'custom' ? 'السيد/ة {الاسم} المحترم،\n' : T[tplKey] || T.due;
+  let channel = lsGet('mth-bld-ch', WA.api() ? 'api' : 'wa'); if (channel === 'api' && !WA.api()) channel = 'wa';
+  let text = tplKey === 'custom' ? 'السيد/ة {الاسم} المحترم،\n' : T[tplKey] || T.due;
   const m = modal({ title: `إرسال رسالة إلى ${rows.length} ${rows.length === 1 ? 'مستلم' : 'مستلمين'}`, size: 'wide', body: '<div id="cmp"></div>', foot: '<div id="cmp-f" class="row" style="width:100%"></div>' });
   const step1 = () => {
     const first = rows[0];
     $('#cmp', m.el).innerHTML = `<div class="grid g2" style="gap:18px;align-items:start"><div class="stack" style="gap:12px">
-        <div class="field"><label>قناة الإرسال</label><div class="seg">${Object.entries(CH_NAME).map(([k, t]) => `<button class="${channel === k ? 'on' : ''}" data-ch="${k}">${t}</button>`).join('')}</div></div>
+        <div class="field"><label>قناة الإرسال</label><div class="seg">${['api', 'wa', 'sms', 'copy'].filter(k => k !== 'api' || WA.api()).map(k => `<button class="${channel === k ? 'on' : ''}" data-ch="${k}">${k === 'api' ? ICO('bolt').replace('<svg', '<svg style="width:14px;height:14px;vertical-align:-2px"') + ' ' : ''}${k === 'wa' && WA.api() ? 'واتساب (فتح المحادثة)' : CH_NAME[k]}</button>`).join('')}</div>${WA.api() ? '' : `<span class="hint">للإرسال الآلي المباشر من داخل البرنامج فعّل «واتساب للأعمال» من الإعدادات.</span>`}</div>
         <div class="field"><label>القالب</label><select class="sel" id="tpl">${[['due', 'تذكير بمبلغ مستحق'], ['overdue', 'إشعار تأخر السداد'], ['thanks', 'شكر وإشعار رصيد'], ['custom', 'نص حر']].map(([k, t]) => `<option value="${k}" ${k === tplKey ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
         <div class="field"><label>نص الرسالة</label><textarea class="txt" id="msg" rows="8">${esc(text)}</textarea>
           <div class="ph-list">${PLACEHOLDERS.map(p => `<button type="button" data-ph="${p}">{${p}}</button>`).join('')}</div><span class="hint">تُستبدل الحقول بين الأقواس ببيانات كل زبون تلقائياً.</span></div>
       </div><div><div class="field"><label>معاينة — ${esc(first.c.name)}</label><div class="preview-msg" id="pv"></div></div>
-        <p class="muted" style="font-size:12.5px;margin-top:12px">${ICO('info').replace('<svg', '<svg style="width:14px;height:14px;vertical-align:-2px"')} يفتح البرنامج محادثة واتساب أو تطبيق الرسائل لكل مستلم والنص جاهز، وتضغط أنت «إرسال». الرسائل الجماعية الآلية تتطلب ربط خدمة رسائل مدفوعة عند تحويل البرنامج لنسخة سطح المكتب أو الخادم.</p>
+        <p class="muted" style="font-size:12.5px;margin-top:12px">${ICO('info').replace('<svg', '<svg style="width:14px;height:14px;vertical-align:-2px"')} ${channel === 'api' ? 'تُرسل الرسائل تلقائياً من داخل البرنامج عبر واتساب للأعمال دون فتح أي نافذة، وتظهر حالة كل رسالة.' : 'يفتح البرنامج محادثة واتساب أو تطبيق الرسائل لكل مستلم والنص جاهز، وتضغط أنت «إرسال».'}</p>
         ${rows.filter(r => !intlPhone(r.c.phone)).length ? `<p class="warn-t" style="font-size:13px">${rows.filter(r => !intlPhone(r.c.phone)).length} مستلم بدون رقم هاتف سيُتخطّى.</p>` : ''}</div></div>`;
     $('#cmp-f', m.el).innerHTML = `<button class="btn pri" id="go">${ICO('send')} متابعة إلى الإرسال</button><label class="check"><input type="checkbox" id="savetpl"> حفظ النص كقالب</label>`;
     const ta = $('#msg', m.el), pv = () => $('#pv', m.el).textContent = fillTemplate(ta.value, first);
@@ -226,26 +225,42 @@ function composeMessages(rows, tplKey = 'due') {
     };
   };
   const step2 = () => {
-    const q = rows.map(r => ({ r, phone: intlPhone(r.c.phone), msg: fillTemplate(text, r), done: false }));
+    const q = rows.map(r => ({ r, phone: intlPhone(r.c.phone), msg: fillTemplate(text, r), done: false, err: '' })); let running = false;
     const draw = () => {
       const done = q.filter(x => x.done).length, valid = q.filter(x => x.phone || channel === 'copy'), next = valid.find(x => !x.done);
       $('#cmp', m.el).innerHTML = `<div class="row" style="margin-bottom:12px"><b style="font-family:var(--fd)">تم ${done} من ${valid.length}</b><span class="spacer"></span><span class="chip acc plain">${CH_NAME[channel]}</span></div>
         <div class="hbar" style="grid-template-columns:1fr;margin-bottom:14px"><div class="tr"><i style="width:${valid.length ? done / valid.length * 100 : 0}%"></i></div></div>
         <div class="queue">${q.map((x, i) => `<div class="q-it ${x.done ? 'done' : x === next ? 'cur' : ''}"><div class="l-ico" style="width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--panel2)">${x.done ? ICO('check') : i + 1}</div>
-          <div class="l-main"><b>${esc(x.r.c.name)}</b><br><span>${x.phone ? `<bdi dir="ltr">+${x.phone}</bdi>` : 'لا يوجد رقم'} · ${moneyT(x.r.amount)}</span></div>
+          <div class="l-main"><b>${esc(x.r.c.name)}</b><br><span>${x.phone ? `<bdi dir="ltr">+${x.phone}</bdi>` : 'لا يوجد رقم'} · ${moneyT(x.r.amount)}</span>${x.err ? `<br><span class="danger-t">${esc(x.err)}</span>` : ''}</div>
           ${x.phone || channel === 'copy' ? `<button class="btn sm ${x === next ? 'pri' : ''}" data-q="${i}">${x.done ? 'إعادة' : channel === 'copy' ? 'نسخ' : 'إرسال'}</button>` : '<span class="chip plain">تُخطّي</span>'}</div>`).join('')}</div>`;
+      if (channel === 'api') {
+        const left = valid.filter(x => !x.done);
+        $('#cmp-f', m.el).innerHTML = running ? `<button class="btn lg" id="stop">إيقاف الإرسال</button><span class="muted">جارٍ الإرسال…</span>` : left.length ? `<button class="btn brass lg" id="auto">${ICO('bolt')} إرسال تلقائي إلى ${left.length}</button><button class="btn ghost" id="bk">رجوع للتعديل</button>` : `<button class="btn pri" id="fin">${ICO('check')} إنهاء</button>`;
+        $$('[data-q]', m.el).forEach(b => b.onclick = () => fire(q[+b.dataset.q]));
+        const au = $('#auto', m.el); if (au) au.onclick = async () => { running = true; draw(); for (const x of q) { if (!running || m.closed) break; if (x.done || !x.phone) continue; await fire(x); await new Promise(r => setTimeout(r, 700)); } running = false; if (!m.closed) draw(); };
+        const sp = $('#stop', m.el); if (sp) sp.onclick = () => { running = false; };
+        const bk2 = $('#bk', m.el); if (bk2) bk2.onclick = step1;
+        const fn2 = $('#fin', m.el); if (fn2) fn2.onclick = () => m.close();
+        return;
+      }
       $('#cmp-f', m.el).innerHTML = next ? `<button class="btn brass lg" id="nx">${ICO('send')} ${channel === 'copy' ? 'نسخ' : 'إرسال'} التالي: ${esc(next.r.c.name)}</button><button class="btn ghost" id="bk">رجوع للتعديل</button>` : `<button class="btn pri" id="fin">${ICO('check')} إنهاء</button>`;
       $$('[data-q]', m.el).forEach(b => b.onclick = () => fire(q[+b.dataset.q]));
       const nx = $('#nx', m.el); if (nx) nx.onclick = () => fire(next);
       const bk = $('#bk', m.el); if (bk) bk.onclick = step1;
       const fin = $('#fin', m.el); if (fin) fin.onclick = () => m.close();
     };
-    const fire = x => {
+    const fire = async x => {
+      if (channel === 'api') {
+        x.err = ''; const it = $(`[data-q="${q.indexOf(x)}"]`, m.el); if (it) { it.disabled = true; it.textContent = '…'; }
+        const r = await WA.sendAPI(x.phone, x.msg);
+        logMessage(x.r.c, 'wa-api', x.msg, 'تذكير مستحقات', r.ok ? 'sent' : 'failed', r.err);
+        if (r.ok) x.done = true; else x.err = r.err; saveDb(); if (!m.closed) draw(); return;
+      }
       if (channel === 'copy') copyText(x.msg); else openLink(msgLink(channel, x.phone, x.msg));
       if (!x.done) { logMessage(x.r.c, channel, x.msg, 'تذكير مستحقات'); x.done = true; saveDb(); }
       draw();
     };
-    m.onClose = () => { const n = q.filter(x => x.done).length; if (n) { logAct('إرسال رسائل', `${n} رسالة عبر ${CH_NAME[channel]}`); saveDb(); Shell.refresh(); } };
+    m.onClose = () => { running = false; const n = q.filter(x => x.done).length; if (n) { logAct('إرسال رسائل', `${n} رسالة عبر ${CH_NAME[channel]}`); saveDb(); Shell.refresh(); } };
     draw();
   };
   step1();
@@ -340,7 +355,7 @@ Views.messages = {
     }
     return tabs + `<div class="card"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>الوقت</th><th>المستلم</th><th>القناة</th><th>النص</th><th>المرسل</th></tr></thead><tbody>
       ${db.messages.slice(0, 300).map(x => `<tr><td class="t-sub" style="white-space:nowrap">${ftime(x.at)}</td><td><div class="t-main">${esc(x.to)}</div><div class="t-sub mono" dir="ltr" style="text-align:right">${esc(x.phone)}</div></td>
-        <td><span class="chip ${x.channel === 'wa' ? 'ok' : 'acc'}">${CH_NAME[x.channel] || x.channel}</span></td><td><div class="t-sub" style="max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(x.text)}">${esc(x.text)}</div></td><td class="t-sub">${esc(userName(x.user))}</td></tr>`).join('')}
+        <td><span class="chip ${x.status === 'failed' ? 'dan' : x.channel.startsWith('wa') ? 'ok' : 'acc'}" title="${esc(x.err || '')}">${CH_NAME[x.channel] || x.channel}${x.status === 'failed' ? ' · فشل' : x.status === 'sent' ? ' · أُرسلت' : ''}</span></td><td><div class="t-sub" style="max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(x.text)}">${esc(x.text)}</div></td><td class="t-sub">${esc(userName(x.user))}</td></tr>`).join('')}
       </tbody></table>${db.messages.length ? '' : emptyHTML('msg', 'لم تُرسل رسائل بعد', '<br>أرسل التذكيرات من «القوائم المستحقة»')}</div></div>`;
   },
   after() { $$('[data-ins]').forEach(b => b.onclick = () => { const ta = $(`[data-tpl="${b.dataset.ins}"]`); ta.setRangeText(`{${b.dataset.ph}}`, ta.selectionStart, ta.selectionEnd, 'end'); ta.focus(); }); }

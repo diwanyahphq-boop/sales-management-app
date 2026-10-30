@@ -107,28 +107,54 @@ const Scanner = {
     const pill = $('.scan-pill'); if (pill) { pill.classList.add('hit'); setTimeout(() => pill.classList.remove('hit'), 700); }
     beep(); onScanCode(code);
   },
-  async camera(cb) {
-    if (!('BarcodeDetector' in window) || !navigator.mediaDevices) {
-      toast('المسح بالكاميرا غير مدعوم في هذا المتصفح. استخدم جهاز الماسح (USB/بلوتوث) أو كروم على أندرويد.', 'warn', 5000); return;
-    }
-    const m = modal({ title: 'المسح بالكاميرا', size: 'narrow', body: `<div class="cam"><video playsinline muted></video><div class="aim"></div></div><p class="muted" style="margin:10px 0 0;font-size:13px">وجّه الكاميرا نحو الباركود وسيُقرأ تلقائياً.</p>` });
-    let stream, alive = true;
-    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); }
-    catch { m.close(); toast('تعذّر فتح الكاميرا، تحقق من الإذن', 'err'); return; }
-    m.onClose = () => { alive = false; stream.getTracks().forEach(t => t.stop()); };
-    const v = $('video', m.el); v.srcObject = stream; await v.play().catch(() => { });
-    let fm = []; try { fm = await BarcodeDetector.getSupportedFormats(); } catch { }
-    const det = new BarcodeDetector(fm.length ? { formats: fm } : undefined);
-    const loop = async () => {
-      if (!alive) return;
-      try { const r = await det.detect(v); if (r.length) { beep(); m.close(); cb(r[0].rawValue); return; } } catch { }
-      setTimeout(loop, 160);
+  hook: null, // معالج مؤقت لنافذة مفتوحة (مثل فاتورة الشراء)
+  async camera(cb, { continuous = false, title = 'المسح بالكاميرا' } = {}) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('الكاميرا غير متاحة هنا. افتح البرنامج عبر https أو من الملف مباشرة، أو استخدم جهاز الماسح.', 'warn', 5000); return; }
+    const m = modal({
+      title, size: 'narrow',
+      body: `<div class="cam"><video playsinline muted></video><div class="aim"></div></div><div class="cam-last" id="cam-last">${continuous ? 'امسح المواد واحدة تلو الأخرى، وتُضاف تلقائياً…' : 'وجّه الكاميرا نحو الباركود وسيُقرأ تلقائياً.'}</div>`,
+      foot: continuous ? `<button class="btn pri" data-done>${ICO('check')} إنهاء المسح</button>` : ''
+    });
+    const v = $('video', m.el); let alive = true, stop = () => { }, last = '', lastAt = 0, n = 0;
+    m.onClose = () => { alive = false; stop(); };
+    const d = $('[data-done]', m.el); if (d) d.onclick = () => m.close();
+    const got = code => {
+      const now = Date.now(); if (!alive || (code === last && now - lastAt < 1800)) return;
+      last = code; lastAt = now; beep();
+      if (!continuous) { m.close(); cb(code); return; }
+      n++; cb(code); const l = $('#cam-last', m.el); if (l) l.innerHTML = `قراءة رقم ${n}: <b class="mono">${esc(code)}</b>`;
     };
-    loop();
+    if ('BarcodeDetector' in window) {
+      let stream;
+      try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); }
+      catch { m.close(); toast('تعذّر فتح الكاميرا، تحقق من الإذن', 'err'); return; }
+      stop = () => stream.getTracks().forEach(t => t.stop());
+      v.srcObject = stream; await v.play().catch(() => { });
+      let fm = []; try { fm = await BarcodeDetector.getSupportedFormats(); } catch { }
+      const det = new BarcodeDetector(fm.length ? { formats: fm } : undefined);
+      const loop = async () => { if (!alive) return; try { const r = await det.detect(v); if (r.length) got(r[0].rawValue); } catch { } if (alive) setTimeout(loop, 150); };
+      loop(); return;
+    }
+    // المتصفحات التي لا تدعم BarcodeDetector (مثل كروم على ويندوز): قارئ ZXing المضمّن مع البرنامج
+    try { await loadZXing(); } catch { m.close(); toast('تعذّر تحميل قارئ الباركود', 'err'); return; }
+    const reader = new ZXing.BrowserMultiFormatReader();
+    stop = () => { try { reader.reset(); } catch { } };
+    try { await reader.decodeFromConstraints({ video: { facingMode: 'environment' } }, v, res => { if (res) got(res.getText()); }); }
+    catch { m.close(); toast('تعذّر فتح الكاميرا، تحقق من الإذن', 'err'); }
   }
 };
+let zxP = null;
+const loadZXing = () => zxP || (zxP = new Promise((res, rej) => {
+  if (window.ZXing) return res();
+  const s = document.createElement('script'); s.src = 'js/vendor/zxing.min.js';
+  s.onload = res; s.onerror = () => { zxP = null; rej(); }; document.head.append(s);
+}));
 function onScanCode(code) {
   code = String(code).trim();
+  if (!code) return;
+  if (Scanner.hook) return Scanner.hook(code);
+  if ($('.modal-bg')) return;
+  if (Shell.route === 'scanner' && can('scanner')) return Station.handle(code);
   const inv = /^(INV|QUO)-(\d+)$/i.exec(code);
   if (inv) {
     const kind = inv[1].toUpperCase() === 'INV' ? 'sale' : 'quote';
@@ -140,8 +166,11 @@ function onScanCode(code) {
     if (m) { posAdd(m.id); return; }
     toast(`لا توجد مادة بالباركود ${code}`, 'warn'); return;
   }
+  if (m && Shell.route === 'materials') { MatF.q = code; Shell.refresh(); return quickMaterial(m); }
   if (m) return quickMaterial(m);
-  if (can('materials')) {
+  if (can('scanner')) {
+    confirmBox(`الباركود <b class="mono">${esc(code)}</b> غير مسجل. هل تريد تسجيله كمادة جديدة من محطة الماسح؟`, { ok: 'تسجيل المادة' }).then(y => { if (y) { Shell.go('scanner'); Station.handle(code); } });
+  } else if (can('materials')) {
     confirmBox(`الباركود <b class="mono">${esc(code)}</b> غير مسجل. هل تريد إضافة مادة جديدة به؟`, { ok: 'إضافة مادة' }).then(y => y && editMaterial(null, { barcode: code }));
   } else toast(`الباركود ${code} غير مسجل`, 'warn');
 }
@@ -164,9 +193,9 @@ function quickMaterial(m) {
 const NAV = [
   ['', [['dash', 'لوحة القيادة', 'dash']]],
   ['المبيعات', [['pos', 'نقطة البيع', 'pos'], ['invoices', 'الفواتير والعروض', 'inv'], ['deliveries', 'التوصيل للمواقع', 'truck']]],
-  ['المخزن', [['materials', 'المواد والمخزن', 'box'], ['purchases', 'المشتريات', 'cart']]],
-  ['الحسابات', [['customers', 'الزبائن والمقاولون', 'helmet'], ['suppliers', 'الموردون', 'factory'], ['dues', 'القوائم المستحقة', 'alarm'], ['payments', 'سندات القبض والصرف', 'receipt']]],
-  ['التواصل والأرشيف', [['messages', 'الرسائل', 'msg'], ['docs', 'الماسح والمستندات', 'scan']]],
+  ['المخزن', [['scanner', 'محطة الماسح', 'scan'], ['materials', 'المواد والمخزن', 'box'], ['purchases', 'المشتريات', 'cart']]],
+  ['الحسابات', [['customers', 'الزبائن والمقاولون', 'helmet'], ['suppliers', 'الموردون', 'factory'], ['dues', 'القوائم المستحقة', 'alarm'], ['payments', 'سندات القبض والصرف', 'receipt'], ['cashbox', 'الصندوق والمصروفات', 'wallet']]],
+  ['التواصل والأرشيف', [['chat', 'المحادثات', 'msg'], ['messages', 'رسائل الزبائن', 'wa'], ['docs', 'أرشيف المستندات', 'doc']]],
   ['الإدارة', [['reports', 'التقارير', 'chart'], ['users', 'المستخدمون والصلاحيات', 'shield'], ['log', 'سجل العمليات', 'log'], ['settings', 'الإعدادات', 'gear']]]
 ];
 const ROUTE_TITLE = Object.fromEntries(NAV.flatMap(g => g[1]).map(r => [r[0], r[1]]));
@@ -185,7 +214,8 @@ const Shell = {
     const d = dueRows(); const over = d.filter(r => r.bucket === 'over').length;
     const low = db.materials.filter(m => ['low', 'out'].includes(stockState(m))).length;
     const ship = db.invoices.filter(i => i.kind === 'sale' && !i.void && i.ship && i.ship.state !== 'done').length;
-    return { dues: over, materials: low, deliveries: ship };
+    const chat = Session.user ? db.notices.filter(n => (n.to === 'all' || n.to === Session.user.id) && !n.readBy.includes(Session.user.id)).length : 0;
+    return { dues: over, materials: low, deliveries: ship, chat };
   },
   nav() {
     const c = this.counts();
@@ -200,7 +230,7 @@ const Shell = {
   },
   top() {
     const v = Views[this.route] || {};
-    const unread = myNotices().filter(n => !n.readBy.includes(Session.user.id)).length + this.counts().dues;
+    const unread = this.counts().chat + this.counts().dues;
     $('#topbar').innerHTML = `
       <button class="icon-btn menu-btn" data-act="menu" aria-label="القائمة">${ICO('menu')}</button>
       <div class="page-title"><h1>${esc(ROUTE_TITLE[this.route] || '')}</h1><div class="dim"><i></i><span>${v.dim ? v.dim() : esc(db.settings.company)}</span><i></i></div></div>
@@ -244,29 +274,15 @@ function openNotices() {
     c.dues ? `<div class="notice"><div class="nh">${ICO('alarm')} تنبيه النظام</div><p>${c.dues} زبون لديهم مبالغ متأخرة السداد. <a href="#" data-go="dues">عرض القوائم المستحقة</a></p></div>` : '',
     c.materials ? `<div class="notice"><div class="nh">${ICO('box')} تنبيه النظام</div><p>${c.materials} مادة وصلت إلى حد إعادة الطلب أو نفدت. <a href="#" data-go="materials" data-low="1">عرض المواد</a></p></div>` : ''
   ].join('');
-  bg.innerHTML = `<div class="drawer"><div class="modal-h"><h3>التنبيهات والرسائل الداخلية</h3>${can('users') ? `<button class="btn sm" data-new>${ICO('plus')} رسالة للمستخدمين</button>` : ''}<button class="x" data-x>${ICO('x')}</button></div>
+  bg.innerHTML = `<div class="drawer"><div class="modal-h"><h3>التنبيهات والرسائل الداخلية</h3>${can('chat') ? `<button class="btn sm" data-new>${ICO('msg')} فتح المحادثات</button>` : ''}<button class="x" data-x>${ICO('x')}</button></div>
     <div style="overflow-y:auto;flex:1">${sys}${list.map(n => `<div class="notice ${n.readBy.includes(Session.user.id) ? '' : 'unread'}"><div class="nh"><b>${esc(userName(n.from))}</b><span>·</span><span>${ftime(n.at)}</span><span>·</span><span>${n.to === 'all' ? 'للجميع' : 'لك'}</span></div><p>${esc(n.text)}</p></div>`).join('') || (!sys ? `<div class="empty">${ICO('bell')}<b>لا توجد تنبيهات</b></div>` : '')}</div></div>`;
   const close = () => { bg.remove(); list.forEach(n => { if (!n.readBy.includes(Session.user.id)) n.readBy.push(Session.user.id); }); saveDb(); Shell.top(); };
   bg.addEventListener('mousedown', e => { if (e.target === bg) close(); });
   bg.querySelector('[data-x]').onclick = close;
   bg.addEventListener('click', e => { if (e.target.closest('[data-go]')) { e.preventDefault(); close(); } });
-  const nb = bg.querySelector('[data-new]'); if (nb) nb.onclick = () => { close(); composeNotice(); };
+  const nb = bg.querySelector('[data-new]'); if (nb) nb.onclick = () => { close(); Shell.go('chat'); };
   document.body.append(bg);
 }
-function composeNotice(to = 'all') {
-  const m = modal({
-    title: 'رسالة داخلية للمستخدمين', size: 'narrow',
-    body: `<div class="field" style="margin-bottom:12px"><label>إلى</label><select class="sel" name="to"><option value="all">جميع المستخدمين</option>${db.users.filter(u => u.id !== Session.user.id).map(u => `<option value="${u.id}" ${u.id === to ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select></div>
-      <div class="field"><label>نص الرسالة</label><textarea class="txt" name="text" rows="4" placeholder="مثال: يرجى جرد ساحة الحديد قبل نهاية الدوام"></textarea></div>`,
-    foot: `<button class="btn pri" data-ok>${ICO('send')} إرسال</button>`
-  });
-  $('[data-ok]', m.el).onclick = () => {
-    const v = formVals(m.el); if (!v.text) return toast('اكتب نص الرسالة', 'warn');
-    db.notices.push({ id: uid(), at: Date.now(), from: Session.user.id, to: v.to, text: v.text, readBy: [Session.user.id] });
-    logAct('رسالة داخلية', v.to === 'all' ? 'للجميع' : userName(v.to)); saveDb(); m.close(); toast('أُرسلت الرسالة'); Shell.top();
-  };
-}
-
 /* ===== لوحة الأوامر ===== */
 function openCmdk() {
   if ($('.cmdk')) return;
@@ -280,7 +296,10 @@ function openCmdk() {
     can('customers') && { s: 'أوامر', t: 'إضافة زبون جديد', i: 'helmet', run: () => editCustomer(null) },
     can('payments') && { s: 'أوامر', t: 'سند قبض من زبون', i: 'cash', run: () => paymentModal('in') },
     can('purchases') && { s: 'أوامر', t: 'فاتورة شراء جديدة', i: 'cart', run: () => purchaseModal() },
-    can('docs') && { s: 'أوامر', t: 'مسح مستند من الماسح', i: 'scan', run: () => { Shell.go('docs'); setTimeout(() => $('#doc-file') && $('#doc-file').click(), 50); } },
+    can('scanner') && { s: 'أوامر', t: 'محطة الماسح: استعلام، إدخال مواد، جرد', i: 'scan', run: () => Shell.go('scanner') },
+    can('chat') && { s: 'أوامر', t: 'المحادثات الداخلية', i: 'msg', run: () => Shell.go('chat') },
+    can('cashbox') && { s: 'أوامر', t: 'تسجيل مصروف', i: 'wallet', run: () => expenseModal() },
+    can('docs') && { s: 'أوامر', t: 'أرشفة مستند ممسوح', i: 'doc', run: () => { Shell.go('docs'); setTimeout(() => $('#doc-file') && $('#doc-file').click(), 50); } },
     { s: 'أوامر', t: 'تبديل الوضع الليلي/النهاري', i: 'moon', run: () => Theme.toggle() }
   ].filter(Boolean);
   const pages = NAV.flatMap(g => g[1]).filter(r => can(r[0])).map(([r, t, i]) => ({ s: 'الصفحات', t, i, run: () => Shell.go(r) }));

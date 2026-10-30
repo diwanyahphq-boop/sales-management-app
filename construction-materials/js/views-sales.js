@@ -32,7 +32,7 @@ function salesByDay(from, to) {
   for (let i = 0; i <= n; i++) {
     const d = addDays(from, i), inv = liveSales().filter(x => x.date === d);
     const dt = new Date(d + 'T12:00:00');
-    out.push({ d, v: inv.reduce((s, x) => s + x.total, 0), n: inv.length, l: n > 20 ? (i % 5 === 0 ? String(dt.getDate()) : '') : `${dt.getDate()}/${dt.getMonth() + 1}`, tl: `${AR_DAYS[dt.getDay()]} ${fdate(d)}`, hl: d === today() });
+    out.push({ d, v: inv.reduce((s, x) => s + invNet(x), 0), n: inv.length, l: n > 20 ? (i % 5 === 0 ? String(dt.getDate()) : '') : `${dt.getDate()}/${dt.getMonth() + 1}`, tl: `${AR_DAYS[dt.getDay()]} ${fdate(d)}`, hl: d === today() });
   }
   return out;
 }
@@ -55,11 +55,12 @@ Views.dash = {
         ${can('pos') ? `<button class="btn pri" data-go="pos">${ICO('pos')} فاتورة جديدة <kbd style="background:transparent;color:inherit;border-color:rgba(255,255,255,.4)">F2</kbd></button>` : ''}
         ${can('payments') ? `<button class="btn" data-act="newReceipt">${ICO('cash')} استلام دفعة</button>` : ''}
         ${can('materials') ? `<button class="btn" data-act="newMaterial">${ICO('plus')} مادة</button>` : ''}
-        ${can('docs') ? `<button class="btn" data-go="docs">${ICO('scan')} مسح مستند</button>` : ''}
+        ${can('scanner') ? `<button class="btn brass" data-go="scanner">${ICO('scan')} محطة الماسح</button>` : ''}
+        ${can('chat') ? `<button class="btn" data-go="chat">${ICO('msg')} المحادثات${Shell.counts().chat ? ` <span class="chip dan plain">${Shell.counts().chat}</span>` : ''}</button>` : ''}
       </div></div>
     <div class="grid g4" style="margin-bottom:18px">
-      <div class="card kpi" ${can('invoices') ? 'data-go="invoices"' : ''}><div class="k-top"><span class="k-ico">${ICO('pos')}</span>مبيعات اليوم</div><div class="k-val num">${money(tod.reduce((s, i) => s + i.total, 0))}</div><div class="k-sub">${tod.length} فاتورة</div></div>
-      <div class="card kpi brass" ${can('reports') ? 'data-go="reports"' : ''}><div class="k-top"><span class="k-ico">${ICO('chart')}</span>مبيعات الشهر</div><div class="k-val num">${money(mon.reduce((s, i) => s + i.total, 0))}</div><div class="k-sub">${mon.length} فاتورة منذ ${fdate(mStart)}</div></div>
+      <div class="card kpi" ${can('invoices') ? 'data-go="invoices"' : ''}><div class="k-top"><span class="k-ico">${ICO('pos')}</span>مبيعات اليوم</div><div class="k-val num">${money(tod.reduce((s, i) => s + invNet(i), 0))}</div><div class="k-sub">${tod.length} فاتورة</div></div>
+      <div class="card kpi brass" ${can('reports') ? 'data-go="reports"' : ''}><div class="k-top"><span class="k-ico">${ICO('chart')}</span>مبيعات الشهر</div><div class="k-val num">${money(mon.reduce((s, i) => s + invNet(i), 0))}</div><div class="k-sub">${mon.length} فاتورة منذ ${fdate(mStart)}</div></div>
       <div class="card kpi danger" ${can('dues') ? 'data-go="dues"' : ''}><div class="k-top"><span class="k-ico">${ICO('alarm')}</span>ديون متأخرة</div><div class="k-val num">${money(overAmt)}</div><div class="k-sub">من أصل ${moneyT(allDue)} على ${dues.length} زبون</div></div>
       <div class="card kpi warn" ${can('materials') ? 'data-go="materials" data-low="1"' : ''}><div class="k-top"><span class="k-ico">${ICO('box')}</span>تحت حد الطلب</div><div class="k-val num">${low.length} <small>مادة</small></div><div class="k-sub">${db.materials.filter(m => m.stock <= 0).length} نافدة تماماً</div></div>
     </div>
@@ -249,15 +250,16 @@ Views.invoices = {
       <div class="toolbar"><div class="search">${ICO('search')}<input class="inp" id="inv-q" placeholder="رقم الفاتورة أو اسم الزبون أو المادة" value="${esc(InvF.q)}"></div>
         <div class="seg">${sts.map(([k, t]) => `<button class="${InvF.st === k ? 'on' : ''}" data-act="invSt" data-s="${k}">${t}</button>`).join('')}</div>
         <input type="date" class="inp" style="width:auto" id="inv-from" value="${InvF.from}" title="من"><input type="date" class="inp" style="width:auto" id="inv-to" value="${InvF.to}" title="إلى">
-        <span class="spacer"></span>${can('pos') ? `<button class="btn pri" data-go="pos">${ICO('plus')} ${sale ? 'فاتورة' : 'عرض سعر'} جديد</button>` : ''}</div>
+        <span class="spacer"></span>${sale ? `<button class="btn" data-act="csvInvoices">${ICO('sheet')} Excel</button>` : ''}${can('pos') ? `<button class="btn pri" data-go="pos">${ICO('plus')} ${sale ? 'فاتورة' : 'عرض سعر'} جديد</button>` : ''}</div>
       <div class="card"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>الرقم</th><th>التاريخ</th><th>الزبون</th><th>المواد</th><th class="n">الإجمالي</th>${sale ? '<th class="n">المدفوع</th><th class="n">المتبقي</th><th>الاستحقاق</th>' : ''}<th>الحالة</th><th></th></tr></thead>
       <tbody>${rows.slice(0, 400).map(i => `<tr>
         <td class="mono">${i.no}</td><td>${fdate(i.date)}</td><td><div class="t-main">${esc(custName(i.customerId))}</div>${i.ship ? `<div class="t-sub">${ICO('truck').replace('<svg', '<svg style="width:12px;height:12px;vertical-align:-2px"')} ${esc(i.ship.addr)}</div>` : ''}</td>
         <td><div class="t-sub" style="max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.lines.map(l => l.name).join('، '))}</div></td>
-        <td class="n">${fmt(i.total)}</td>${sale ? `<td class="n">${fmt(i.paid)}</td><td class="n ${remaining(i) > 0 && !i.void ? 'danger-t' : ''}">${i.void ? '—' : fmt(remaining(i))}</td><td>${i.due ? fdate(i.due) : '—'}</td>` : ''}
+        <td class="n">${fmt(i.total)}${i.returned ? `<div class="t-sub warn-t">مرتجع ${fmt(i.returned)}</div>` : ''}</td>${sale ? `<td class="n">${fmt(i.paid)}</td><td class="n ${remaining(i) > 0 && !i.void ? 'danger-t' : ''}">${i.void ? '—' : fmt(remaining(i))}</td><td>${i.due ? fdate(i.due) : '—'}</td>` : ''}
         <td>${statusChip(i)}</td>
         <td><div class="acts"><button class="btn xs icon" data-act="viewInv" data-id="${i.id}" title="عرض">${ICO('eye')}</button><button class="btn xs icon" data-act="printInv" data-id="${i.id}" title="طباعة">${ICO('print')}</button>
           ${sale && !i.void && remaining(i) > 0 && i.customerId && can('payments') ? `<button class="btn xs icon" data-act="payInv" data-id="${i.id}" title="استلام دفعة">${ICO('cash')}</button>` : ''}
+          ${sale && !i.void && can('returns') && i.lines.some(l => l.qty - retQty(i, l.mid) > 0) ? `<button class="btn xs icon" data-act="retInv" data-id="${i.id}" title="مرتجع">${ICO('undo')}</button>` : ''}
           ${!sale && !i.converted && can('pos') ? `<button class="btn xs" data-act="convQuote" data-id="${i.id}">${ICO('swap')} تحويل لفاتورة</button>` : ''}
           ${can('void') && sale && !i.void ? `<button class="btn xs icon dan" data-act="voidInv" data-id="${i.id}" title="إلغاء الفاتورة">${ICO('x')}</button>` : ''}
           ${can('void') && !sale ? `<button class="btn xs icon dan" data-act="delQuote" data-id="${i.id}" title="حذف">${ICO('trash')}</button>` : ''}</div></td></tr>`).join('')}</tbody>
@@ -282,7 +284,7 @@ function invoiceHTML(inv) {
     <table><thead><tr><th>#</th><th>المادة</th><th>الوحدة</th><th class="n">الكمية</th><th class="n">السعر</th><th class="n">المبلغ</th></tr></thead>
     <tbody>${inv.lines.map((l, i) => `<tr><td>${i + 1}</td><td>${esc(l.name)}</td><td>${esc(l.unit)}</td><td class="n">${fmt(l.qty)}</td><td class="n">${fmt(l.price)}</td><td class="n">${fmt(l.qty * l.price)}</td></tr>`).join('')}</tbody></table>
     <div class="pr-tot"><div><span>المجموع</span><span>${fmt(inv.sub)}</span></div>${inv.discount ? `<div><span>الخصم</span><span>${fmt(inv.discount)}</span></div>` : ''}${inv.delivery ? `<div><span>أجور النقل</span><span>${fmt(inv.delivery)}</span></div>` : ''}${inv.tax ? `<div><span>الضريبة ${inv.taxRate}%</span><span>${fmt(inv.tax)}</span></div>` : ''}
-      <div class="g"><span>الإجمالي</span><span>${moneyT(inv.total)}</span></div>${!quote ? `<div><span>المدفوع</span><span>${fmt(inv.paid)}</span></div><div><span>المتبقي</span><span>${fmt(remaining(inv))}</span></div>` : ''}</div>
+      <div class="g"><span>الإجمالي</span><span>${moneyT(inv.total)}</span></div>${inv.returned ? `<div><span>المرتجع</span><span>${fmt(inv.returned)}</span></div>` : ''}${!quote ? `<div><span>المدفوع</span><span>${fmt(inv.paid)}</span></div><div><span>المتبقي</span><span>${fmt(remaining(inv))}</span></div>` : ''}</div>
     ${inv.note ? `<p><b>ملاحظة:</b> ${esc(inv.note)}</p>` : ''}${inv.void ? `<p style="color:#b3412e;font-weight:600">هذه الفاتورة ملغاة</p>` : ''}
     <p style="color:#555;font-size:11.5px">${esc(s.invoiceNote)}</p>
     <div class="pr-sign"><div>توقيع المستلم</div><div>توقيع أمين المخزن</div><div>الختم</div></div>
@@ -297,7 +299,9 @@ function viewInvoice(id) {
     body: `<div class="doc-paper pr">${invoiceHTML(inv)}</div>`,
     foot: `<button class="btn pri" data-p>${ICO('print')} طباعة</button>
       ${c && c.phone ? `<button class="btn" data-wa>${ICO('wa')} إرسال للزبون</button>` : ''}
-      ${inv.kind === 'sale' && !inv.void && remaining(inv) > 0 && c && can('payments') ? `<button class="btn" data-pay>${ICO('cash')} استلام دفعة</button>` : ''}`
+      ${inv.kind === 'sale' && !inv.void && remaining(inv) > 0 && c && can('payments') ? `<button class="btn" data-pay>${ICO('cash')} استلام دفعة</button>` : ''}
+      ${inv.kind === 'sale' && !inv.void && can('returns') && inv.lines.some(l => l.qty - retQty(inv, l.mid) > 0) ? `<button class="btn" data-ret>${ICO('undo')} مرتجع</button>` : ''}
+      ${can('chat') ? `<button class="btn ghost" data-act="shareChat" data-t="invoice" data-id="${inv.id}">${ICO('msg')} مشاركة مع الفريق</button>` : ''}`
   });
   $('[data-p]', m.el).onclick = () => printInvoice(id);
   const w = $('[data-wa]', m.el); if (w) w.onclick = () => {
@@ -305,6 +309,7 @@ function viewInvoice(id) {
     sendOne(c, txt, `فاتورة ${inv.no}`);
   };
   const p = $('[data-pay]', m.el); if (p) p.onclick = () => { m.close(); paymentModal('in', inv.customerId, inv.id); };
+  const rt = $('[data-ret]', m.el); if (rt) rt.onclick = () => { m.close(); returnModal(inv.id); };
 }
 Object.assign(ACTS, {
   invKind: el => { InvF.kind = el.dataset.k; InvF.st = ''; Shell.refresh(); },

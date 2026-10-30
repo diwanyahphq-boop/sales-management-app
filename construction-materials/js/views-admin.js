@@ -10,11 +10,11 @@ Views.materials = {
     const q = MatF.q.toLowerCase();
     const rows = db.materials.filter(m => (!MatF.cat || m.cat === MatF.cat) && (!MatF.low || ['low', 'out'].includes(stockState(m))) && (!q || m.name.toLowerCase().includes(q) || m.barcode.includes(q) || (m.loc || '').toLowerCase().includes(q)));
     const cats = [...new Set([...db.categories, ...db.materials.map(m => m.cat)])];
-    return `<div class="toolbar"><div class="search">${ICO('search')}<input class="inp" id="m-q" placeholder="الاسم أو الباركود أو الموقع" value="${esc(MatF.q)}"></div>
+    return `<div class="toolbar"><div class="search">${ICO('search')}<input class="inp" id="m-q" placeholder="الاسم أو الموقع، أو امسح الباركود" value="${esc(MatF.q)}"></div><button class="btn icon" data-act="matCam" title="بحث بكاميرا الهاتف">${ICO('camera')}</button>
       <select class="sel" id="m-cat" style="width:auto"><option value="">كل الأصناف</option>${cats.map(c => `<option ${MatF.cat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
       <label class="check"><input type="checkbox" id="m-low" ${MatF.low ? 'checked' : ''}> تحت حد الطلب فقط</label>
       <span class="spacer"></span><button class="btn" data-act="labels" ${MatF.sel.size ? '' : 'disabled'}>${ICO('tag')} ملصقات باركود (${MatF.sel.size})</button>
-      <button class="btn pri" data-act="newMaterial">${ICO('plus')} مادة جديدة</button></div>
+      <button class="btn" data-act="csvMaterials">${ICO('sheet')} Excel</button>${can('scanner') ? `<button class="btn" data-go="scanner">${ICO('scan')} إدخال بالماسح</button>` : ''}<button class="btn pri" data-act="newMaterial">${ICO('plus')} مادة جديدة</button></div>
       <div class="card"><div class="tbl-wrap"><table class="tbl"><thead><tr><th style="width:34px"></th><th>المادة</th><th>الباركود</th><th>الوحدة</th><th>المخزون</th>${can('cost') ? '<th class="n">الكلفة</th>' : ''}<th class="n">سعر المفرد</th><th class="n">سعر الجملة</th><th>الموقع</th><th></th></tr></thead><tbody>
       ${rows.map(m => {
         const st = stockState(m);
@@ -29,6 +29,7 @@ Views.materials = {
   },
   after() {
     const q = $('#m-q'); q.addEventListener('input', debounce(() => { MatF.q = q.value.trim(); Shell.refresh(); const n = $('#m-q'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250));
+    q.addEventListener('keydown', e => { if (e.key !== 'Enter') return; const m = db.materials.find(x => x.barcode === q.value.trim()); if (m) { e.preventDefault(); beep(); quickMaterial(m); } else if (q.value.trim() && !db.materials.some(x => x.name.includes(q.value.trim()))) onScanCode(q.value.trim()); });
     $('#m-cat').onchange = e => { MatF.cat = e.target.value; Shell.refresh(); };
     $('#m-low').onchange = e => { MatF.low = e.target.checked; Shell.refresh(); };
     $$('[data-msel]').forEach(cb => cb.onchange = () => { cb.checked ? MatF.sel.add(cb.dataset.msel) : MatF.sel.delete(cb.dataset.msel); $('[data-act=labels]').disabled = !MatF.sel.size; $('[data-act=labels]').innerHTML = `${ICO('tag')} ملصقات باركود (${MatF.sel.size})`; });
@@ -84,6 +85,7 @@ function editMaterial(id, preset = {}) {
   });
 }
 Object.assign(ACTS, {
+  matCam: () => Scanner.camera(c => { MatF.q = c; Shell.refresh(); const m = db.materials.find(x => x.barcode === c); m ? quickMaterial(m) : onScanCode(c); }),
   editMat: el => editMaterial(el.dataset.id),
   delMat: async el => {
     const m = matById(el.dataset.id);
@@ -139,6 +141,15 @@ Views.purchases = {
       </tbody></table>${db.purchases.length ? '' : emptyHTML('cart', 'لا توجد مشتريات', '<br>سجّل فواتير الموردين لزيادة المخزون تلقائياً')}</div></div>`;
   }
 };
+function createPurchase({ supplierId, ref = '', date = today(), due = addDays(today(), 30), lines, paid = 0, updCost = true }) {
+  const total = round2(lines.reduce((s, l) => s + num(l.qty) * num(l.cost), 0));
+  const p = { id: uid(), no: nextNo('pur'), ref, date: date || today(), at: Date.now(), supplierId, lines: lines.map(l => { const m = matById(l.mid); return { mid: l.mid, name: m.name, unit: m.unit, qty: num(l.qty), cost: num(l.cost) }; }), total, paid: 0, due, note: '', user: Session.user.id };
+  db.purchases.unshift(p);
+  p.lines.forEach(l => { moveStock(l.mid, l.qty, docNo('PUR', p.no), 'شراء'); if (updCost && l.cost) matById(l.mid).cost = l.cost; });
+  if (paid > 0) addPayment({ type: 'out', partyId: supplierId, amount: Math.min(paid, total), method: 'نقدي', note: `مع فاتورة الشراء ${p.no}`, docId: p.id });
+  logAct('فاتورة شراء', `رقم ${p.no} · ${supName(supplierId)} · ${moneyT(total)}`);
+  return p;
+}
 function purchaseModal() {
   if (!can('purchases')) return toast('لا تملك صلاحية المشتريات', 'warn');
   if (!db.materials.length) return toast('أضف المواد أولاً', 'warn');
@@ -147,6 +158,7 @@ function purchaseModal() {
     title: 'فاتورة شراء من مورد', size: 'wide',
     body: `<div class="form-grid c3" style="margin-bottom:14px"><div class="field"><label>المورد</label><select class="sel" name="sup"><option value="">— اختر —</option>${db.suppliers.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select></div>
       <div class="field"><label>رقم فاتورة المورد</label><input class="inp" name="ref"></div><div class="field"><label>التاريخ</label><input class="inp" type="date" name="date" value="${today()}"></div></div>
+      <div class="scan-field sm" style="margin-bottom:12px"><div class="laser"></div>${ICO('scan')}<input id="pur-scan" class="mono" placeholder="امسح باركود المادة لإضافتها مباشرة…" dir="ltr" autocomplete="off"><button type="button" class="btn sm" data-pcam>${ICO('camera')}</button></div>
       <div id="pl"></div><button type="button" class="btn sm" data-add style="margin-top:8px">${ICO('plus')} سطر</button>
       <div class="form-grid c3" style="margin-top:16px"><div class="field"><label>المبلغ المدفوع</label><input class="inp num" name="paid" placeholder="0" inputmode="decimal"></div>
         <div class="field"><label>تاريخ الاستحقاق</label><input class="inp" type="date" name="due" value="${addDays(today(), 30)}"></div>
@@ -169,6 +181,17 @@ function purchaseModal() {
     $('#pt', md.el).textContent = moneyT(lines.reduce((s, l) => s + num(l.qty) * num(l.cost), 0));
   };
   draw();
+  const addScan = code => {
+    const m = db.materials.find(x => x.barcode === String(code).trim());
+    if (!m) { beep(320); toast(`الباركود ${code} غير مسجل. سجّله من «محطة الماسح» في وضع إدخال المواد.`, 'warn', 5000); return; }
+    beep(); const ex = lines.find(l => l.mid === m.id);
+    if (ex) ex.qty = num(ex.qty) + 1; else { const empty = lines.find(l => !l.mid); const l = empty || {}; Object.assign(l, { mid: m.id, qty: 1, cost: m.cost }); if (!empty) lines.push(l); }
+    const s = $('[name=sup]', md.el); if (!s.value && m.supplierId) s.value = m.supplierId; draw();
+  };
+  const ps = $('#pur-scan', md.el); ps.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addScan(ps.value); ps.value = ''; } });
+  $('[data-pcam]', md.el).onclick = () => Scanner.camera(addScan, { continuous: true, title: 'مسح مواد فاتورة الشراء' });
+  Scanner.hook = addScan; const oc = md.onClose; md.onClose = () => { Scanner.hook = null; oc && oc(); };
+  setTimeout(() => ps.focus(), 60);
   $('[data-add]', md.el).onclick = () => { lines.push({ mid: '', qty: '', cost: '' }); draw(); };
   $('#pur-file', md.el).onchange = e => { scanFile = e.target.files[0] || null; $('#sc-l', md.el).textContent = scanFile ? scanFile.name.slice(0, 22) : 'من الماسح / الكاميرا'; };
   $('[data-ok]', md.el).onclick = async () => {
@@ -176,12 +199,9 @@ function purchaseModal() {
     if (!v.sup) return toast('اختر المورد', 'warn');
     if (!ls.length) return toast('أضف مادة واحدة على الأقل', 'warn');
     const total = round2(ls.reduce((s, l) => s + num(l.qty) * num(l.cost), 0)), paid = Math.min(total, num(v.paid));
-    const p = { id: uid(), no: nextNo('pur'), ref: v.ref, date: v.date || today(), at: Date.now(), supplierId: v.sup, lines: ls.map(l => { const m = matById(l.mid); return { mid: l.mid, name: m.name, unit: m.unit, qty: num(l.qty), cost: num(l.cost) }; }), total, paid: 0, due: v.due, note: '', user: Session.user.id };
-    db.purchases.unshift(p);
-    p.lines.forEach(l => { moveStock(l.mid, l.qty, docNo('PUR', p.no), 'شراء'); if (v.upd && l.cost) matById(l.mid).cost = l.cost; });
-    if (paid > 0) addPayment({ type: 'out', partyId: v.sup, amount: paid, method: 'نقدي', note: `مع فاتورة الشراء ${p.no}`, docId: p.id });
+    const p = createPurchase({ supplierId: v.sup, ref: v.ref, date: v.date, due: v.due, lines: ls, paid, updCost: v.upd });
     if (scanFile) { try { const d = await saveScannedFile(scanFile, { title: `فاتورة المورد ${supName(v.sup)} ${v.ref || ''}`.trim(), kind: 'فاتورة مورد', party: 's', partyId: v.sup, refNo: `PUR-${p.no}` }); p.docId = d.id; } catch { toast('تعذّر حفظ صورة الفاتورة', 'err'); } }
-    logAct('فاتورة شراء', `رقم ${p.no} · ${supName(v.sup)} · ${moneyT(total)}`);
+    saveDb();
     saveDb(); md.close(); toast(`فاتورة الشراء ${p.no} محفوظة وأُدخلت الكميات إلى المخزن`); Shell.refresh();
   };
 }
@@ -326,20 +346,25 @@ function repRange() {
 function reportData() {
   const [from, to] = repRange();
   const inv = liveSales().filter(i => i.date >= from && i.date <= to);
-  const sales = inv.reduce((s, i) => s + i.total, 0), net = inv.reduce((s, i) => s + i.sub - i.discount, 0);
-  const cost = inv.reduce((s, i) => s + i.lines.reduce((a, l) => a + l.qty * (l.cost || 0), 0), 0);
-  const collected = db.payments.filter(p => p.type === 'in' && p.party === 'c' && p.date >= from && p.date <= to).reduce((s, p) => s + p.amount, 0);
-  const purchases = db.purchases.filter(p => !p.void && p.date >= from && p.date <= to).reduce((s, p) => s + p.total, 0);
   const byCat = {}, byMat = {}, byUser = {};
+  let net = 0, cost = 0;
   inv.forEach(i => {
-    byUser[i.user] = (byUser[i.user] || { n: 0, v: 0 }); byUser[i.user].n++; byUser[i.user].v += i.total;
+    const f = i.sub ? (i.sub - i.discount) / i.sub : 1;
+    byUser[i.user] = (byUser[i.user] || { n: 0, v: 0 }); byUser[i.user].n++; byUser[i.user].v += invNet(i);
     i.lines.forEach(l => {
-      const m = matById(l.mid), cat = m ? m.cat : 'محذوفة';
-      byCat[cat] = (byCat[cat] || 0) + l.qty * l.price;
-      const k = byMat[l.mid] || (byMat[l.mid] = { name: l.name, unit: l.unit, q: 0, v: 0, c: 0 }); k.q += l.qty; k.v += l.qty * l.price; k.c += l.qty * (l.cost || 0);
+      const q = l.qty - retQty(i, l.mid); if (q <= 0) return;
+      const m = matById(l.mid), cat = m ? m.cat : 'محذوفة', rev = q * l.price * f, c = q * (l.cost || 0);
+      net += rev; cost += c; byCat[cat] = (byCat[cat] || 0) + rev;
+      const k = byMat[l.mid] || (byMat[l.mid] = { name: l.name, unit: l.unit, q: 0, v: 0, c: 0 }); k.q += q; k.v += rev; k.c += c;
     });
   });
-  return { from, to, inv, sales, net, cost, profit: net - cost, collected, purchases, byCat, byMat, byUser, delivery: inv.reduce((s, i) => s + (i.delivery || 0), 0) };
+  const inP = p => p.date >= from && p.date <= to;
+  const collected = db.payments.filter(p => p.type === 'in' && p.party === 'c' && inP(p)).reduce((s, p) => s + p.amount, 0) - db.payments.filter(p => p.type === 'out' && p.party === 'c' && inP(p)).reduce((s, p) => s + p.amount, 0);
+  const purchases = db.purchases.filter(p => !p.void && inP(p)).reduce((s, p) => s + p.total, 0);
+  const expenses = db.expenses.filter(inP).reduce((s, e) => s + e.amount, 0);
+  const returns = liveSales().reduce((s, i) => s + (i.returns || []).filter(inP).reduce((a, r) => a + r.amount, 0), 0);
+  const sales = inv.reduce((s, i) => s + invNet(i), 0);
+  return { from, to, inv, sales, net, cost, profit: net - cost, expenses, netProfit: net - cost - expenses, returns, collected, purchases, byCat, byMat, byUser, delivery: inv.reduce((s, i) => s + (i.delivery || 0), 0) };
 }
 Views.reports = {
   dim: () => { const [f, t] = repRange(); return `${fdate(f)} — ${fdate(t)}`; },
@@ -358,6 +383,10 @@ Views.reports = {
       <div class="card kpi"><div class="k-top"><span class="k-ico">${ICO('cash')}</span>المقبوضات</div><div class="k-val num">${money(R.collected)}</div><div class="k-sub">نقدي وتسديدات ديون</div></div>
       <div class="card kpi warn"><div class="k-top"><span class="k-ico">${ICO('cart')}</span>المشتريات</div><div class="k-val num">${money(R.purchases)}</div><div class="k-sub">${cc ? `قيمة المخزون الحالي ${moneyT(stockVal)}` : ''}</div></div>
     </div>
+    ${cc ? `<div class="grid g4" style="margin-bottom:18px">
+      <div class="card kpi danger"><div class="k-top"><span class="k-ico">${ICO('wallet')}</span>المصروفات</div><div class="k-val num">${money(R.expenses)}</div><div class="k-sub">رواتب، نقل، كهرباء…</div></div>
+      <div class="card kpi" style="grid-column:span 2"><div class="k-top"><span class="k-ico">${ICO('bolt')}</span>صافي الربح بعد المصروفات</div><div class="k-val num ${R.netProfit < 0 ? 'danger-t' : 'ok-t'}">${money(R.netProfit)}</div><div class="k-sub">مجمل الربح ${moneyT(R.profit)} − المصروفات ${moneyT(R.expenses)}</div></div>
+      <div class="card kpi warn"><div class="k-top"><span class="k-ico">${ICO('undo')}</span>المرتجعات</div><div class="k-val num">${money(R.returns)}</div><div class="k-sub">مخصومة من المبيعات</div></div></div>` : ''}
     <div class="grid g-side" style="margin-bottom:18px">
       <div class="card"><div class="card-h"><h3>المبيعات اليومية</h3></div><div class="card-b">${days <= 92 ? barChart(salesByDay(R.from, R.to)) : '<p class="muted">اختر فترة أقصر من 3 أشهر لعرض المخطط اليومي.</p>'}</div></div>
       <div class="card"><div class="card-h"><h3>المبيعات حسب الصنف</h3></div><div class="card-b"><div class="hbars">${cats.map(([c, v]) => `<div class="hbar" data-tip="<b>${esc(c)}</b><br>${moneyT(v)} · ${R.sales ? fmt(v / R.sales * 100) : 0}%"><span>${esc(c)}</span><div class="tr"><i style="width:${v / maxC * 100}%"></i></div><span class="v">${fmt(v)}</span></div>`).join('') || '<p class="muted">لا توجد مبيعات</p>'}</div></div></div>
@@ -378,7 +407,7 @@ Object.assign(ACTS, {
   repPrint: () => {
     const R = reportData(), cc = can('cost');
     printHTML(`<div class="pr-h"><div>${brandHTML(db.settings.company)}</div><div style="text-align:left"><p class="pr-title">تقرير المبيعات</p><div>${fdate(R.from)} — ${fdate(R.to)}</div></div></div>
-      <div class="pr-meta"><div><b>المبيعات:</b> ${moneyT(R.sales)} (${R.inv.length} فاتورة)</div><div><b>المقبوضات:</b> ${moneyT(R.collected)}</div>${cc ? `<div><b>الكلفة:</b> ${moneyT(R.cost)}</div><div><b>مجمل الربح:</b> ${moneyT(R.profit)}</div>` : ''}<div><b>المشتريات:</b> ${moneyT(R.purchases)}</div><div><b>أجور النقل:</b> ${moneyT(R.delivery)}</div></div>
+      <div class="pr-meta"><div><b>المبيعات:</b> ${moneyT(R.sales)} (${R.inv.length} فاتورة)</div><div><b>المقبوضات:</b> ${moneyT(R.collected)}</div>${cc ? `<div><b>الكلفة:</b> ${moneyT(R.cost)}</div><div><b>مجمل الربح:</b> ${moneyT(R.profit)}</div>` : ''}<div><b>المشتريات:</b> ${moneyT(R.purchases)}</div><div><b>أجور النقل:</b> ${moneyT(R.delivery)}</div>${cc ? `<div><b>المصروفات:</b> ${moneyT(R.expenses)}</div><div><b>صافي الربح:</b> ${moneyT(R.netProfit)}</div>` : ''}<div><b>المرتجعات:</b> ${moneyT(R.returns)}</div></div>
       <table><thead><tr><th>المادة</th><th class="n">الكمية</th><th class="n">المبيعات</th>${cc ? '<th class="n">الربح</th>' : ''}</tr></thead><tbody>${Object.values(R.byMat).sort((a, b) => b.v - a.v).map(m => `<tr><td>${esc(m.name)}</td><td class="n">${fmt(m.q)} ${esc(m.unit)}</td><td class="n">${fmt(m.v)}</td>${cc ? `<td class="n">${fmt(m.v - m.c)}</td>` : ''}</tr>`).join('')}</tbody></table>
       <div class="pr-foot">المثلث · ${APP.name} — حقوق البرمجة © أصيل الصافي · طُبع بواسطة ${esc(Session.user.name)}</div>`);
   }
@@ -472,6 +501,13 @@ Views.settings = {
           <div class="field"><label>العملة</label><input class="inp" name="currency" value="${esc(s.currency)}"></div><div class="field"><label>نسبة الضريبة %</label><input class="inp num" name="tax" value="${s.tax}"></div>
           <div class="field"><label>مدة الاستحقاق الافتراضية (يوم)</label><input class="inp num" name="dueDays" value="${s.dueDays}"></div><div class="field"><label>رمز الدولة للرسائل</label><input class="inp num" name="country" value="${esc(s.country)}"><span class="hint">العراق 964 — يحوّل 07XX إلى 9647XX</span></div>
           <label class="check full"><input type="checkbox" name="blockNegative" ${s.blockNegative ? 'checked' : ''}> منع البيع بكمية أكبر من المخزون المتوفر</label></div></div></div>
+        <div class="card"><div class="card-h"><h3>${ICO('wa')} واتساب للأعمال — الإرسال المباشر</h3>${WA.api() ? '<span class="chip ok">مفعّل</span>' : '<span class="chip plain">غير مفعّل</span>'}</div><div class="card-b"><div class="form-grid" id="set-wa">
+          <div class="field full"><label>طريقة الإرسال</label><select class="sel" name="mode"><option value="link" ${s.wa.mode !== 'api' ? 'selected' : ''}>فتح محادثة واتساب والنص جاهز (بدون إعداد)</option><option value="api" ${s.wa.mode === 'api' ? 'selected' : ''}>إرسال مباشر تلقائي من البرنامج (WhatsApp Cloud API)</option></select></div>
+          <div class="field"><label>Phone Number ID</label><input class="inp mono" name="phoneId" value="${esc(s.wa.phoneId)}" dir="ltr"></div><div class="field"><label>رمز الوصول (Access Token)</label><input class="inp mono" type="password" name="token" value="${esc(s.wa.token)}" dir="ltr"></div>
+          <div class="field"><label>نوع الرسالة</label><select class="sel" name="apiType"><option value="template" ${s.wa.apiType !== 'text' ? 'selected' : ''}>قالب معتمد بمتغير واحد {{1}}</option><option value="text" ${s.wa.apiType === 'text' ? 'selected' : ''}>نص حر (ضمن 24 ساعة من آخر رسالة للزبون)</option></select></div>
+          <div class="field"><label>اسم القالب ولغته</label><div class="row" style="flex-wrap:nowrap"><input class="inp mono" name="template" value="${esc(s.wa.template)}" dir="ltr" placeholder="payment_reminder"><input class="inp mono" name="lang" value="${esc(s.wa.lang)}" dir="ltr" style="width:70px"></div></div>
+          <p class="hint full" style="margin:0">تحصل على البيانات من حساب Meta for Developers ← WhatsApp. واتساب يشترط قالباً معتمداً للرسائل التي يبدأها المتجر، فأنشئ قالباً نصه {{1}} ليضع البرنامج رسالتك كاملة فيه. يُحفظ الرمز في هذا المتصفح فقط.</p>
+          <div class="row full"><input class="inp" id="wa-test" placeholder="رقم للاختبار 07XXXXXXXXX" dir="ltr" style="max-width:220px"><button class="btn sm" data-act="waTest">${ICO('send')} إرسال رسالة اختبار</button></div></div></div></div>
         <div class="row"><button class="btn pri" data-act="saveSettings">${ICO('check')} حفظ الإعدادات</button></div>
       </div>
       <div class="stack">
@@ -506,8 +542,18 @@ async function restoreData(text) {
 Object.assign(ACTS, {
   saveSettings: () => {
     const a = formVals($('#set-co')), b = formVals($('#set-sale'));
+    const w = formVals($('#set-wa')); db.settings.wa = { ...db.settings.wa, ...w };
+    if (w.mode === 'api' && (!w.token || !w.phoneId)) toast('أكمل Phone Number ID ورمز الوصول لتفعيل الإرسال المباشر', 'warn', 5000);
     Object.assign(db.settings, a, { currency: b.currency || 'د.ع', tax: num(b.tax), dueDays: num(b.dueDays) || 30, country: b.country.replace(/\D/g, '') || '964', blockNegative: b.blockNegative });
     logAct('تعديل الإعدادات'); rerender(); toast('حُفظت الإعدادات');
+  },
+  waTest: async () => {
+    const w = formVals($('#set-wa')), ph = intlPhone($('#wa-test').value);
+    if (!w.token || !w.phoneId) return toast('أدخل Phone Number ID ورمز الوصول', 'warn');
+    if (!ph) return toast('أدخل رقم الاختبار', 'warn');
+    const old = db.settings.wa; db.settings.wa = { ...old, ...w, mode: 'api' };
+    const r = await WA.sendAPI(ph, `رسالة اختبار من ${db.settings.company} — نظام المثلث`); db.settings.wa = old;
+    toast(r.ok ? 'نجح الاختبار، وصلت الرسالة. احفظ الإعدادات.' : 'فشل الاختبار: ' + r.err, r.ok ? 'ok' : 'err', 7000);
   },
   setTheme: el => { Theme.set(el.dataset.t); Shell.refresh(); },
   backup: async () => { downloadFile(`نسخة-المثلث-المواد-الإنشائية-${today()}.json`, await backupJSON()); logAct('نسخة احتياطية'); saveDb(); },
