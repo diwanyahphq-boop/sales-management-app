@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>فيديو شرح المثلث</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Readex+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#071513;font-family:"IBM Plex Sans Arabic",sans-serif;color:#e5efec}
+  .bg{position:absolute;inset:0;
+    background:
+      linear-gradient(rgba(83,180,166,.10) 1px,transparent 1px),linear-gradient(90deg,rgba(83,180,166,.10) 1px,transparent 1px),
+      linear-gradient(rgba(83,180,166,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(83,180,166,.04) 1px,transparent 1px),
+      radial-gradient(120% 70% at 80% 0%,#145247 0%,#0a1f1b 50%,#061210 100%);
+    background-size:120px 120px,120px 120px,24px 24px,24px 24px,auto}
+  .head{opacity:0;position:absolute;top:56px;left:70px;right:70px;display:flex;align-items:center;gap:22px;transition:opacity .5s}
+  .head svg{width:84px;height:84px;color:#53b4a6;flex:none}
+  .head .n{font-family:"Readex Pro";font-weight:700;font-size:58px;line-height:1}
+  .head .s{font-size:27px;color:#9cc0b8;margin-top:6px}
+  .head .step{margin-inline-start:auto;font-family:"Readex Pro";font-size:28px;color:#d8a54c;border:2px solid rgba(216,165,76,.5);border-radius:40px;padding:6px 22px;opacity:0;transition:opacity .4s}
+  /* الهاتف */
+  .phone{opacity:0;transform:translateY(140px) scale(.92);position:absolute;left:50%;top:200px;width:722px;height:1508px;margin-left:-361px;border-radius:92px;
+    background:linear-gradient(145deg,#2c3533,#0e1413 40%,#1f2826);padding:20px;box-shadow:0 0 0 2px #3c4946,0 50px 120px rgba(0,0,0,.6),0 0 160px rgba(83,180,166,.12);transition:transform .8s cubic-bezier(.2,.8,.2,1),opacity .6s}
+  .screen{position:relative;width:682px;height:1468px;border-radius:74px;overflow:hidden;background:#eceee9}
+  .sbar{position:absolute;top:0;left:0;right:0;height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 56px;font-family:"Readex Pro";font-weight:600;font-size:24px;color:#1b2421;direction:ltr;z-index:2;background:#eceee9}
+  .island{position:absolute;top:14px;left:50%;width:190px;height:44px;margin-left:-95px;border-radius:30px;background:#000;z-index:3}
+  .scaler{position:absolute;top:56px;left:0;width:390px;height:805px;transform:scale(1.7487);transform-origin:0 0}
+  iframe{width:390px;height:805px;border:0;display:block;background:#eceee9}
+  .tap{position:absolute;width:86px;height:86px;margin:-43px 0 0 -43px;border-radius:50%;background:rgba(216,165,76,.35);border:4px solid #d8a54c;pointer-events:none;z-index:20;opacity:0;transform:scale(.4)}
+  .tap.go{animation:tap .7s ease-out forwards}
+  @keyframes tap{0%{opacity:0;transform:scale(.4)}25%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.5)}}
+  .laser{position:absolute;left:30px;right:30px;height:6px;border-radius:6px;background:linear-gradient(90deg,transparent,#ff5a3c 15%,#ff8a5c 50%,#ff5a3c 85%,transparent);box-shadow:0 0 30px 8px rgba(255,90,60,.55);z-index:21;opacity:0;pointer-events:none}
+  .laser.go{animation:laser 1.1s ease-in-out forwards}
+  @keyframes laser{0%{opacity:0;top:30%}15%{opacity:1}50%{top:62%}85%{opacity:1;top:38%}100%{opacity:0;top:48%}}
+  .scanchip{position:absolute;left:50%;top:150px;transform:translateX(-50%) translateY(20px);background:#d8a54c;color:#1d1405;font-family:"Readex Pro";font-weight:600;font-size:30px;padding:10px 30px;border-radius:40px;opacity:0;transition:all .3s;z-index:22;white-space:nowrap;direction:rtl}
+  .scanchip.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  .scanchip b{font-family:ui-monospace,monospace;direction:ltr;display:inline-block}
+  /* العنوان أسفل الشاشة */
+  .cap{position:absolute;left:60px;right:60px;bottom:40px;min-height:150px;padding:22px 34px;border-radius:34px;background:rgba(9,26,23,.82);border:1.5px solid rgba(83,180,166,.35);backdrop-filter:blur(10px);
+    box-shadow:0 20px 60px rgba(0,0,0,.45);transition:opacity .35s,transform .35s;z-index:30}
+  .cap.hide{opacity:0;transform:translateY(20px)}
+  .cap h2{margin:0;font-family:"Readex Pro";font-weight:600;font-size:46px;line-height:1.25}
+  .cap h2 em{font-style:normal;color:#d8a54c}
+  .cap p{margin:8px 0 0;font-size:30px;color:#b6d2cb;line-height:1.5}
+  /* المقدمة والخاتمة */
+  .full{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 90px;z-index:40;transition:opacity .7s}
+  .full.hide{opacity:0;pointer-events:none}
+  .full svg.logo{width:230px;height:230px;color:#53b4a6;animation:pop 1s cubic-bezier(.2,.9,.3,1.3) both}
+  @keyframes pop{from{transform:scale(.3) rotate(-30deg);opacity:0}}
+  .full .brand{font-family:"Readex Pro";font-weight:700;font-size:130px;line-height:1;margin-top:30px}
+  .full .prog{font-size:46px;color:#9cc0b8;margin-top:16px}
+  .full .tag{margin-top:70px;font-family:"Readex Pro";font-size:58px;font-weight:600;line-height:1.35}
+  .full .tag em{font-style:normal;color:#d8a54c}
+  .rise{animation:rise .8s ease-out both}
+  @keyframes rise{from{opacity:0;transform:translateY(40px)}}
+  .feats{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:60px;width:100%}
+  .feats div{border:1.5px solid rgba(83,180,166,.35);background:rgba(255,255,255,.04);border-radius:24px;padding:24px 20px;font-size:32px;font-weight:500;text-align:right;display:flex;align-items:center;gap:16px}
+  .feats div i{width:16px;height:16px;border-radius:5px;background:#d8a54c;flex:none}
+  .copy{position:absolute;bottom:70px;left:0;right:0;text-align:center;font-size:28px;color:#7f9a94;line-height:1.7}
+  .copy b{color:#e5efec;font-weight:600}
+  .ruler{height:22px;width:640px;margin:46px auto 0;background:
+    repeating-linear-gradient(90deg,rgba(216,165,76,.8) 0 2px,transparent 2px 16px) bottom/auto 10px repeat-x,
+    repeating-linear-gradient(90deg,rgba(216,165,76,.8) 0 2px,transparent 2px 80px) bottom/auto 22px repeat-x}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="head" id="head"><svg viewBox="0 0 48 48"><path d="M24 4 44 41H4z" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linejoin="round"/><path d="M24 20 33.5 36h-19z" fill="currentColor" opacity=".45"/></svg>
+  <div><div class="n">المثلث</div><div class="s" id="pname"></div></div><div class="step" id="step"></div></div>
+<div class="phone" id="phone"><div class="screen" id="screen"><div class="island"></div><div class="sbar"><span id="clock">9:41</span><span>●●●● 5G ▮</span></div>
+  <div class="scaler"><iframe id="app"></iframe></div><div class="laser" id="laser"></div></div></div>
+<div class="tap" id="tap"></div>
+<div class="scanchip" id="scanchip"></div>
+<div class="cap hide" id="cap"><h2 id="capT"></h2><p id="capS"></p></div>
+<div class="full" id="intro"></div>
+<div class="full hide" id="outro"></div>
+<script>
+const P = new URLSearchParams(location.search).get('p') || 'c';
+const CFG = {
+  c: { dir: '../../construction-materials', name: 'نظام إدارة المواد الإنشائية', tag: 'كل كيس اسمنت وكل طن حديد<br><em>في مكانه الصحيح</em>' },
+  t: { dir: '../../hand-tools', name: 'نظام مستودع العدد الإنشائية', tag: 'كل عدّة في المستودع<br><em>بمواصفاتها ورصيدها</em>' }
+}[P];
+const LOGO = '<svg class="logo" viewBox="0 0 48 48"><path d="M24 4 44 41H4z" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linejoin="round"/><path d="M24 20 33.5 36h-19z" fill="currentColor" opacity=".45"/></svg>';
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const S = 1.7487, SX = () => $('#screen').getBoundingClientRect();
+let W, D, TOTAL = 0, NUM = 0;
+$('#pname').textContent = CFG.name;
+const d = new Date(); $('#clock').textContent = `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+/* ===== أدوات التحكم بالبرنامج داخل الهاتف ===== */
+const q = sel => typeof sel === 'string' ? D.querySelector(sel) : sel;
+async function waitFor(sel, ms = 4000) { const t = Date.now(); while (Date.now() - t < ms) { const e = q(sel); if (e && e.getBoundingClientRect().width) return e; await sleep(60); } throw new Error('missing ' + sel); }
+function toStage(el) { const r = el.getBoundingClientRect(), s = SX(); return { x: s.left + (r.left + r.width / 2) * S, y: s.top + 56 * 1 + (r.top + r.height / 2) * S }; }
+async function reveal(sel) {
+  const el = await waitFor(sel), r = el.getBoundingClientRect(), vh = W.innerHeight;
+  const box = el.closest('.modal-b, .chat-msgs, .tk-lines, .cmdk-list, .queue') ;
+  if (r.top < 70 || r.bottom > vh - 20) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); await sleep(700); }
+  return el;
+}
+async function tap(sel, { click = true, pause = 350 } = {}) {
+  const el = await reveal(sel); const p = toStage(el), t = $('#tap');
+  t.style.left = p.x + 'px'; t.style.top = p.y + 'px'; t.classList.remove('go'); void t.offsetWidth; t.classList.add('go');
+  await sleep(260); if (click) el.click(); await sleep(pause); return el;
+}
+async function type(sel, text, { speed = 75, clear = true } = {}) {
+  const el = await tap(sel, { click: false, pause: 150 }); el.focus();
+  if (clear) el.value = '';
+  for (const ch of text) { el.value += ch; el.dispatchEvent(new Event('input', { bubbles: true })); await sleep(speed); }
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(250);
+}
+async function choose(sel, value) { const el = await tap(sel, { click: false }); el.value = value; el.dispatchEvent(new Event('change', { bubbles: true })); await sleep(500); }
+async function scan(code, label = 'مسح باركود') {
+  const c = $('#scanchip'); c.innerHTML = `${label}: <b>${code}</b>`; c.classList.add('on');
+  const l = $('#laser'); l.classList.remove('go'); void l.offsetWidth; l.classList.add('go');
+  await sleep(900); W.eval("Scanner").hit(code); await sleep(500); c.classList.remove('on'); await sleep(250);
+}
+async function scrollTo(y, wait = 900) { W.scrollTo({ top: y, behavior: 'smooth' }); await sleep(wait); }
+async function scrollBy(y, wait = 900) { W.scrollBy({ top: y, behavior: 'smooth' }); await sleep(wait); }
+async function scrollEl(sel, y, wait = 900) { const e = q(sel); if (e) e.scrollBy({ top: y, behavior: 'smooth' }); await sleep(wait); }
+async function nav(route) { await tap('[data-act=menu]', { pause: 550 }); await tap(`#nav a[data-go="${route}"]`, { pause: 700 }); W.scrollTo({ top: 0 }); }
+async function closeModal() { const x = D.querySelector('.modal-bg:last-of-type [data-x]'); if (x) await tap(x, { pause: 450 }); }
+async function okIfConfirm() { const b = D.querySelector('.modal-bg [data-ok]'); if (b && /تأكيد|متابعة|تفريغ/.test(b.textContent) === false) {} if (b) await tap(b, { pause: 600 }); }
+async function cap(title, sub = '') {
+  const c = $('#cap'); c.classList.add('hide'); await sleep(250);
+  $('#capT').innerHTML = title; $('#capS').innerHTML = sub; c.classList.remove('hide');
+  const st = $('#step'); st.textContent = `الخطوة ${NUM} من ${TOTAL}`; st.style.opacity = 1;
+  await sleep(450);
+}
+
+/* ===== المشاهد ===== */
+const common = {
+  setup: async () => {
+    await cap('إعداد البرنامج <em>بدقيقة واحدة</em>', 'اسم المخزن، حساب المدير، وكلمة المرور');
+    await type('[name=name]', 'أصيل الصافي'); await type('[name=pass]', '1234', { speed: 140 });
+    await sleep(400); await tap('#f-setup button', { pause: 1400 });
+  },
+  dash: async () => {
+    await cap('لوحة القيادة', 'مبيعات اليوم والشهر، الديون المتأخرة، والمواد تحت حد الطلب');
+    await sleep(1500); await scrollBy(560, 1500); await scrollBy(700, 1700); await scrollTo(0, 900);
+  },
+  dues: async () => {
+    await nav('dues');
+    await cap('القوائم المستحقة', 'الديون مصنّفة: متأخرة، خلال أسبوع، لاحقة');
+    await sleep(900); await scrollBy(620, 1300);
+    await tap('[data-act=dueSendAll]', { pause: 900 });
+    await cap('إرسال التذكير <em>عبر واتساب</em>', 'رسالة جاهزة تُملأ باسم كل زبون ومبلغه تلقائياً');
+    await sleep(1300); await scrollEl('.modal-b', 380, 1200);
+    await tap('#go', { pause: 900 });
+    await cap('طابور الإرسال', 'رسالة لكل زبون بنقرة، أو إرسال تلقائي مباشر بواتساب للأعمال');
+    await tap('#nx', { pause: 900 }); await tap('#nx', { pause: 900 }); await tap('#nx', { pause: 1100 });
+    await closeModal(); await sleep(400);
+  },
+  chat: async () => {
+    await nav('chat');
+    await cap('المحادثات <em>داخل البرنامج</em>', 'تواصل بين المدير والموظفين، مع إرفاق فاتورة أو زبون أو مادة');
+    await reveal('#chat-in'); await type('#chat-in', 'يرجى تجهيز الطلبية لموقع المقاول حيدر قبل الظهر', { speed: 45 });
+    await tap('[data-act=chatSend]', { pause: 900 }); const b = D.querySelector('.chat-msgs'); if (b) b.scrollTop = b.scrollHeight; await sleep(1200);
+  },
+  reports: async () => {
+    await nav('reports');
+    await cap('التقارير والأرباح', 'المبيعات، مجمل الربح، المصروفات، وصافي الربح لأي فترة');
+    await sleep(1200); await scrollBy(700, 1500); await scrollBy(800, 1600); await scrollBy(900, 1600);
+  },
+  users: async () => {
+    await nav('users');
+    await cap('المستخدمون والصلاحيات', 'مدير، محاسب، مبيعات، أمين مخزن — ولكل مستخدم صلاحياته');
+    await tap('[data-act=newUser]', { pause: 900 }); await scrollEl('.modal-b', 400, 1400); await closeModal();
+  }
+};
+const scenes = {
+  c: [
+    common.setup, common.dash,
+    async () => {
+      await nav('pos');
+      await cap('نقطة البيع <em>بالماسح الضوئي</em>', 'امسح باركود المادة فتُضاف للفاتورة مباشرة');
+      await sleep(600); await scan(W.eval("db").materials[0].barcode); await scan(W.eval("db").materials[3].barcode); await scan(W.eval("db").materials[0].barcode);
+      await reveal('#ticket');
+      await cap('فاتورة آجلة لمقاول', 'سعر الجملة، سقف الدين، دفعة جزئية وتاريخ استحقاق');
+      await choose('#pos-cust', W.eval("db").customers[1].id);
+      await tap('[data-act=posPay][data-p=part]', { pause: 500 });
+      await type('#pos-paid', '500000', { speed: 90 });
+      await tap('[data-act=posSave]:not([data-print])', { pause: 900 });
+      if (D.querySelector('.modal-bg [data-ok]')) await tap('.modal-bg [data-ok]', { pause: 900 });
+      W.viewInvoice(W.eval("db").invoices[0].id); await sleep(900);
+      await cap('الفاتورة جاهزة للطباعة والإرسال', 'باركود الفاتورة، المدفوع والمتبقي، وزر إرسال للزبون');
+      await scrollEl('.modal-b', 500, 1500); await scrollEl('.modal-b', 600, 1500); await closeModal();
+    },
+    common.dues,
+    async () => {
+      await nav('scanner');
+      await cap('محطة الماسح', 'استعلام، إدخال مواد جديدة، وجرد المخزن بالمسح');
+      await tap('[data-act=stMode][data-m=recv]', { pause: 600 });
+      await scan('6281234567890');
+      await cap('مادة جديدة؟ <em>تُسجّل فوراً</em>', 'الباركود غير مسجل، فيفتح نموذج التسجيل ثم يكمل المسح');
+      await type('#st-reg [name=name]', 'مسامير خرسانة 10 سم', { speed: 60 });
+      await type('#st-reg [name=price]', '12000', { speed: 90 });
+      await tap('[data-act=stSaveNew]', { pause: 900 });
+      await scan('6281234567890'); await scan(W.eval("db").materials[1].barcode);
+      await cap('قائمة الاستلام', 'تُحفظ كفاتورة شراء وتدخل الكميات إلى المخزن');
+      await reveal('[data-act=stRecvIn]'); await sleep(1500);
+    },
+    common.chat, common.reports, common.users
+  ],
+  t: [
+    common.setup, common.dash,
+    async () => {
+      await nav('materials');
+      await cap('بطاقة مواصفات <em>لكل عدّة</em>', 'الماركة، الموديل، المقاس، المنشأ، الضمان، والمواصفات الفنية');
+      await sleep(800); await tap('[data-act=toolCard]', { pause: 1200 });
+      await scrollEl('.modal-b', 520, 1500); await scrollEl('.modal-b', 560, 1500); await closeModal();
+    },
+    async () => {
+      await nav('pos');
+      await cap('البيع <em>بالماسح الضوئي</em>', 'امسح باركود العدّة فتُضاف للفاتورة');
+      await sleep(500); await scan(W.eval("db").materials[5].barcode); await scan(W.eval("db").materials[0].barcode);
+      await reveal('#ticket'); await choose('#pos-cust', W.eval("db").customers[1].id);
+      await tap('[data-act=posSave]:not([data-print])', { pause: 1000 });
+      await cap('الرقم التسلسلي <em>عند البيع</em>', 'امسح رقم المثقاب ليُحفظ ضمانه مع الفاتورة');
+      const sn = W.eval("db").serials.find(s => s.mid === W.eval("db").materials[0].id && s.status === 'stock').sn; window.__sn = sn;
+      await type('[data-sl="0"][data-sk="0"]', sn, { speed: 55 });
+      await tap('.modal-bg [data-ok]', { pause: 1000 });
+      if (D.querySelector('.modal-bg [data-ok]')) await tap('.modal-bg [data-ok]', { pause: 900 });
+      await sleep(600);
+    },
+    async () => {
+      await nav('dash');
+      await cap('التحقق من الضمان <em>بمسح الرقم</em>', 'يظهر الزبون والفاتورة وتاريخ نهاية الضمان');
+
+      D.querySelectorAll('.modal-bg').forEach(x => x.remove()); D.querySelector('.shell').classList.remove('nav-open');
+      await scan(window.__sn, 'مسح رقم تسلسلي');
+      if (!D.querySelector('.modal-bg')) { console.log('fallback warranty'); W.eval('warrantyCard')(W.eval('snFind')(window.__sn)); }
+      await sleep(3000); await closeModal();
+    },
+    common.dues, common.chat, common.reports
+  ]
+}[P];
+
+/* ===== التشغيل ===== */
+async function run() {
+  localStorage.clear(); sessionStorage.clear();
+  TOTAL = scenes.length;
+  $('#intro').innerHTML = `${LOGO}<div class="brand rise" style="animation-delay:.3s">المثلث</div><div class="prog rise" style="animation-delay:.5s">${CFG.name}</div><div class="ruler rise" style="animation-delay:.7s"></div><div class="tag rise" style="animation-delay:.9s">${CFG.tag}</div>`;
+  $('#phone').style.transform = 'translateY(140px) scale(.92)'; $('#phone').style.opacity = 0; $('#head').style.opacity = 0;
+  const f = $('#app');
+  await new Promise(r => { f.onload = r; f.src = CFG.dir + '/index.html'; });
+  W = f.contentWindow; D = W.document;
+  W.open = () => ({}); W.print = () => { };
+  await D.fonts.ready; await document.fonts.ready;
+  await sleep(3600);
+  $('#intro').classList.add('hide'); $('#head').style.opacity = 1; $('#phone').style.opacity = 1; $('#phone').style.transform = 'none';
+  await sleep(900);
+  for (const sc of scenes) { NUM++; try { await sc(); } catch (e) { console.error('scene', e); } await sleep(300); }
+  $('#cap').classList.add('hide'); $('#step').style.opacity = 0; await sleep(400);
+  $('#phone').style.opacity = 0; $('#phone').style.transform = 'translateY(80px) scale(.94)'; $('#head').style.opacity = 0;
+  const feats = P === 'c'
+    ? ['نقطة بيع بالباركود', 'حسابات المقاولين الآجلة', 'تذكير الديون بواتساب', 'محطة الماسح والجرد', 'محادثات داخلية', 'تقارير وصافي الربح', 'صلاحيات المستخدمين', 'الصندوق والمصروفات']
+    : ['بطاقة مواصفات وصورة', 'رقم تسلسلي وضمان', 'نقطة بيع بالباركود', 'حسابات المقاولين', 'تذكير الديون بواتساب', 'محطة الماسح والجرد', 'محادثات داخلية', 'تقارير وصافي الربح'];
+  $('#outro').innerHTML = `${LOGO}<div class="brand rise" style="font-size:110px">المثلث</div><div class="prog rise" style="animation-delay:.2s">${CFG.name}</div>
+    <div class="feats">${feats.map((t, i) => `<div class="rise" style="animation-delay:${.35 + i * .12}s"><i></i>${t}</div>`).join('')}</div>
+    <div class="copy"><b>المثلث · ${CFG.name}</b><br>حقوق البرمجة © أصيل الصافي</div>`;
+  $('#outro').classList.remove('hide');
+  await sleep(5200);
+  window.__done = true;
+}
+document.fonts.ready.then(() => {}); window.addEventListener('load', () => setTimeout(run, 50));
+</script>
+</body>
+</html>
