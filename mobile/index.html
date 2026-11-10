@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0e5a52">
+<title>المثلث لإدارة الأقساط</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Readex+Pro:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f6f5; --card:#ffffff; --ink:#15211f; --muted:#5f6f6c; --line:#dde5e3;
+  --accent:#0e5a52; --accent-soft:#e3f0ee; --brass:#a8741f; --brass-soft:#f7eedf;
+  --ok:#1f7a4d; --ok-soft:#e2f3ea; --bad:#b3362c; --bad-soft:#fbe6e3; --warn:#a8741f;
+  --shadow:0 1px 2px rgba(0,0,0,.05),0 4px 14px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0f1514; --card:#18211f; --ink:#e8efed; --muted:#9aaba7; --line:#2a3633;
+    --accent:#53b4a6; --accent-soft:#1d3532; --brass:#d8a54c; --brass-soft:#352a17;
+    --ok:#5cc28e; --ok-soft:#173327; --bad:#ef7d72; --bad-soft:#3a1f1c; --warn:#d8a54c;
+    --shadow:none;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:'IBM Plex Sans Arabic','Segoe UI',Tahoma,sans-serif;font-size:15px;line-height:1.55;min-height:100vh;padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+h1,h2,h3,.num,.brand-name{font-family:'Readex Pro','IBM Plex Sans Arabic',sans-serif}
+button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+a{text-decoration:none}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+input[readonly]{color:var(--accent);font-weight:600;background:var(--accent-soft);border-color:transparent}
+label{display:block;font-size:13px;color:var(--muted);margin-bottom:5px;font-weight:500}
+.hidden{display:none!important}
+
+/* brand */
+.brand{display:flex;align-items:center;gap:10px}
+.logo{width:34px;height:34px;flex:none}
+.brand-name{font-weight:700;font-size:19px;line-height:1.1}
+.brand-sub{font-size:12px;color:var(--muted)}
+.footer{text-align:center;font-size:12px;color:var(--muted);padding:18px 16px 8px;line-height:1.7}
+
+/* auth / activation */
+.gate{position:fixed;inset:0;background:var(--bg);z-index:50;display:flex;flex-direction:column;overflow:auto}
+.gate-inner{flex:1;display:flex;flex-direction:column;justify-content:center;padding:24px 16px;max-width:420px;width:100%;margin:0 auto}
+.gate .brand{justify-content:center;margin-bottom:22px}
+.gate .logo{width:52px;height:52px}
+.gate .brand-name{font-size:26px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:var(--shadow)}
+.panel h2{font-size:18px;margin-bottom:4px}
+.panel p.hint{color:var(--muted);font-size:13px;margin-bottom:16px}
+.field{margin-bottom:12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 16px;border-radius:10px;font-weight:600;font-size:14px;background:var(--accent-soft);color:var(--accent)}
+.btn-primary{background:var(--accent);color:#fff}
+@media (prefers-color-scheme: dark){.btn-primary{color:#0f1514}}
+.btn-brass{background:var(--brass-soft);color:var(--brass)}
+.btn-danger{background:var(--bad-soft);color:var(--bad)}
+.btn-block{width:100%}
+.btn:active{transform:scale(.98)}
+.machine{display:flex;gap:8px;align-items:center;background:var(--bg);border:1px dashed var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+.machine .num{flex:1;font-size:18px;letter-spacing:1px;direction:ltr;text-align:center}
+
+/* top bar */
+.topbar{position:sticky;top:0;z-index:10;background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px;padding-top:calc(10px + env(safe-area-inset-top))}
+.trial{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--brass-soft);color:var(--brass);font-size:13px;padding:8px 12px;border-radius:10px;margin:12px 16px 0}
+.trial button{background:var(--brass);color:#fff;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600}
+
+main{padding:14px 16px;max-width:720px;margin:0 auto}
+.section-title{font-size:15px;font-weight:600;margin:18px 0 10px;display:flex;justify-content:space-between;align-items:center}
+.section-title:first-child{margin-top:0}
+
+/* stats */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow)}
+.stat .k{font-size:12px;color:var(--muted)}
+.stat .v{font-family:'Readex Pro',sans-serif;font-size:19px;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:12px;color:var(--muted);font-weight:500}
+.stat.wide{grid-column:1/-1}
+.stat.ok .v{color:var(--ok)} .stat.bad .v{color:var(--bad)} .stat.acc .v{color:var(--accent)}
+
+/* cards */
+.list{display:flex;flex-direction:column;gap:10px}
+.item{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);text-align:right;width:100%}
+.item-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.item-name{font-weight:600;font-size:15px}
+.item-meta{font-size:12px;color:var(--muted)}
+.item-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:13px}
+.progress{height:6px;background:var(--bg);border-radius:4px;overflow:hidden;margin-top:8px}
+.progress span{display:block;height:100%;background:var(--accent);border-radius:4px}
+.chip{font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.late{background:var(--bad-soft);color:var(--bad)}
+.chip.on{background:var(--accent-soft);color:var(--accent)}
+.empty{text-align:center;color:var(--muted);padding:28px 10px;font-size:14px;background:var(--card);border:1px dashed var(--line);border-radius:14px}
+.search{position:relative;margin-bottom:10px}
+.filters{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto}
+.filters button{padding:6px 14px;border-radius:20px;font-size:13px;background:var(--card);border:1px solid var(--line);white-space:nowrap}
+.filters button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+@media (prefers-color-scheme: dark){.filters button.active{color:#0f1514}}
+
+/* form */
+.form{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form h3{font-size:14px;color:var(--accent);margin:6px 0 10px}
+.form h3:not(:first-child){margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.actions{display:flex;gap:8px;margin-top:16px}
+.actions .btn{flex:1}
+
+/* more */
+.menu{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.menu button{display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;text-align:right;border-bottom:1px solid var(--line);font-size:15px}
+.menu button:last-child{border-bottom:0}
+.menu .ico{width:34px;height:34px;border-radius:10px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:none}
+.menu .ico svg{width:18px;height:18px}
+.menu .t small{display:block;font-size:12px;color:var(--muted)}
+
+/* bottom nav */
+.nav{position:fixed;bottom:0;left:0;right:0;z-index:20;background:var(--card);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:env(safe-area-inset-bottom)}
+.nav button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:9px 0 8px;font-size:11px;color:var(--muted)}
+.nav button svg{width:22px;height:22px}
+.nav button.active{color:var(--accent);font-weight:600}
+
+/* sheet */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:30;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--card);width:100%;max-width:720px;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;padding:8px 16px calc(18px + env(safe-area-inset-bottom))}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 12px}
+.sheet h2{font-size:18px}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin:14px 0}
+.kv div{font-size:13px;color:var(--muted)}
+.kv b{display:block;color:var(--ink);font-size:14px;font-weight:600}
+.kv .full{grid-column:1/-1}
+.row-btns{display:flex;gap:8px;flex-wrap:wrap}
+.row-btns .btn{flex:1;min-width:30%}
+.pay{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.pay:last-child{border-bottom:0}
+.pay small{color:var(--muted);display:block;font-size:12px}
+
+/* dialog + toast */
+.dialog{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:16px}
+.dialog .panel{max-width:360px;width:100%}
+.toast{position:fixed;bottom:calc(88px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:24px;font-size:14px;z-index:70;max-width:90%;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.2)}
+
+/* print invoice */
+#printArea{display:none}
+@media print{
+  body{background:#fff;color:#000;padding:0}
+  body>*:not(#printArea){display:none!important}
+  #printArea{display:block;padding:18px;font-size:13px}
+  #printArea table{width:100%;border-collapse:collapse;margin-top:12px}
+  #printArea td,#printArea th{border:1px solid #999;padding:7px;text-align:right}
+  #printArea th{background:#eef4f3;width:35%}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="logo" viewBox="0 0 48 48">
+    <path d="M24 6 L43 40 L5 40 Z" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linejoin="round"/>
+    <path d="M24 21 L33 36 L15 36 Z" fill="currentColor" opacity=".45"/>
+  </symbol>
+</svg>
+
+<!-- ============ Auth ============ -->
+<div class="gate" id="authGate">
+  <div class="gate-inner">
+    <div class="brand">
+      <svg class="logo" style="color:var(--accent)"><use href="#logo"/></svg>
+      <div><div class="brand-name">المثلث</div><div class="brand-sub">نظام إدارة المبيعات والأقساط</div></div>
+    </div>
+    <div class="panel hidden" id="setupBox">
+      <h2>تهيئة النظام</h2>
+      <p class="hint">أنشئ حساب المدير لحماية سجلات العملاء والعقود على هذا الهاتف.</p>
+      <div class="field"><label>اسم المستخدم</label><input id="setupUser" autocomplete="username"></div>
+      <div class="field"><label>كلمة المرور</label><input id="setupPass" type="password" autocomplete="new-password"></div>
+      <div class="field"><label>تأكيد كلمة المرور</label><input id="setupPass2" type="password" autocomplete="new-password"></div>
+      <button class="btn btn-primary btn-block" onclick="handleSetup()">إنشاء الحساب والدخول</button>
+    </div>
+    <div class="panel hidden" id="loginBox">
+      <h2>تسجيل الدخول</h2>
+      <p class="hint">أدخل بيانات حساب المدير.</p>
+      <div class="field"><label>اسم المستخدم</label><input id="loginUser" autocomplete="username"></div>
+      <div class="field"><label>كلمة المرور</label><input id="loginPass" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')handleLogin()"></div>
+      <button class="btn btn-primary btn-block" onclick="handleLogin()">دخول</button>
+    </div>
+  </div>
+  <div class="footer">المثلث · نظام إدارة المبيعات والأقساط<br>حقوق البرمجة © أصيل الصافي</div>
+</div>
+
+<!-- ============ Activation ============ -->
+<div class="gate hidden" id="actGate">
+  <div class="gate-inner">
+    <div class="brand">
+      <svg class="logo" style="color:var(--accent)"><use href="#logo"/></svg>
+      <div><div class="brand-name">المثلث</div><div class="brand-sub">نظام إدارة المبيعات والأقساط</div></div>
+    </div>
+    <div class="panel">
+      <h2 id="actTitle">تفعيل البرنامج</h2>
+      <p class="hint" id="actHint">انتهت الفترة التجريبية. بياناتك محفوظة بأمان، أرسل رقم الجهاز للمطور للحصول على الرقم التسلسلي.</p>
+      <label>رقم الجهاز</label>
+      <div class="machine"><span class="num" id="actMachine"></span><button class="btn" onclick="copyText(lic().machine)">نسخ</button></div>
+      <div class="field"><label>الرقم التسلسلي</label><input id="actSerial" dir="ltr" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" style="text-align:center;letter-spacing:1px"></div>
+      <button class="btn btn-primary btn-block" onclick="activate()">تفعيل</button>
+      <button class="btn btn-block hidden" id="actBack" style="margin-top:8px" onclick="closeActivation()">رجوع</button>
+    </div>
+  </div>
+  <div class="footer">المثلث · نظام إدارة المبيعات والأقساط<br>حقوق البرمجة © أصيل الصافي</div>
+</div>
+
+<!-- ============ App ============ -->
+<div id="app" class="hidden">
+  <header class="topbar">
+    <div class="brand">
+      <svg class="logo" style="color:var(--accent)"><use href="#logo"/></svg>
+      <div><div class="brand-name">المثلث</div><div class="brand-sub">نظام إدارة المبيعات والأقساط</div></div>
+    </div>
+  </header>
+  <div class="trial hidden" id="trialBar"><span id="trialText"></span><button onclick="openActivation(true)">تفعيل</button></div>
+
+  <main>
+    <!-- Home -->
+    <section id="tab-home">
+      <div class="section-title">الموقف المالي</div>
+      <div class="stats">
+        <div class="stat acc"><div class="k">عدد العقود</div><div class="v num" id="sCount">0</div></div>
+        <div class="stat"><div class="k">إجمالي المبيعات</div><div class="v num" id="sSales">0</div></div>
+        <div class="stat ok"><div class="k">المبالغ المستلمة</div><div class="v num" id="sReceived">0</div></div>
+        <div class="stat bad"><div class="k">الديون المتبقية</div><div class="v num" id="sRemaining">0</div></div>
+        <div class="stat wide"><div class="k">المستحق هذا الشهر (أقساط لم تُسدَّد)</div><div class="v num" id="sDue">0</div></div>
+      </div>
+      <div class="section-title">عقود متأخرة <span class="chip late" id="lateCount">0</span></div>
+      <div class="list" id="lateList"></div>
+    </section>
+
+    <!-- Contracts -->
+    <section id="tab-list" class="hidden">
+      <div class="search"><input id="q" type="search" placeholder="ابحث بالاسم أو رقم العقد أو الكفيل أو الهاتف" oninput="renderList()"></div>
+      <div class="filters" id="filters">
+        <button class="active" data-f="all">الكل</button>
+        <button data-f="late">متأخر</button>
+        <button data-f="on">ملتزم</button>
+        <button data-f="done">مكتمل</button>
+      </div>
+      <div class="list" id="contractList"></div>
+    </section>
+
+    <!-- Form -->
+    <section id="tab-new" class="hidden">
+      <div class="form">
+        <h3 id="formTitle">عقد جديد</h3>
+        <input type="hidden" id="editId">
+        <div class="grid2">
+          <div class="field"><label>رقم العقد</label><input id="contractNumber"></div>
+          <div class="field"><label>تاريخ العقد</label><input id="contractDate" type="date"></div>
+        </div>
+        <div class="field"><label>اسم العميل</label><input id="buyerName"></div>
+        <div class="field"><label>هاتف العميل</label><input id="buyerPhone" type="tel" dir="ltr" style="text-align:right"></div>
+        <div class="field"><label>السلعة المباعة</label><input id="itemSold"></div>
+        <h3>الكفيل</h3>
+        <div class="field"><label>اسم الكفيل</label><input id="guarantorName"></div>
+        <div class="field"><label>هاتف الكفيل</label><input id="guarantorPhone" type="tel" dir="ltr" style="text-align:right"></div>
+        <h3>المبالغ (د.ع)</h3>
+        <div class="grid2">
+          <div class="field"><label>السعر الكلي</label><input id="totalPrice" type="number" inputmode="numeric" oninput="calc()"></div>
+          <div class="field"><label>المقدمة</label><input id="downPayment" type="number" inputmode="numeric" oninput="calc()"></div>
+          <div class="field"><label>عدد الأشهر</label><input id="monthsCount" type="number" inputmode="numeric" oninput="calc()"></div>
+          <div class="field"><label>القسط الشهري</label><input id="monthlyInstallment" readonly value="0"></div>
+        </div>
+        <div class="field"><label>المتبقي بعد المقدمة</label><input id="remainingPrice" readonly value="0"></div>
+        <div class="field"><label>ملاحظات وشروط</label><textarea id="contractNotes" rows="2"></textarea></div>
+        <div class="actions">
+          <button class="btn btn-primary" onclick="saveContract()" id="saveBtn">حفظ العقد</button>
+          <button class="btn hidden" id="cancelEditBtn" onclick="resetForm();go('list')">إلغاء</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- More -->
+    <section id="tab-more" class="hidden">
+      <div class="menu">
+        <button onclick="exportBackup()"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v3h16v-3"/></svg></span><span class="t">حفظ نسخة احتياطية<small>ملف JSON بكل العقود والتسديدات</small></span></button>
+        <button onclick="pickRestore()"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 15V3m0 0-4 4m4-4 4 4M4 17v3h16v-3"/></svg></span><span class="t">استعادة نسخة احتياطية<small>يقبل أيضاً نسخ برنامج الحاسبة</small></span></button>
+        <button onclick="exportExcel()"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span><span class="t">تصدير Excel<small>جدول بكل العقود</small></span></button>
+        <button onclick="openActivation(true)"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9m-3 3 3 3"/></svg></span><span class="t">التفعيل<small id="licState"></small></span></button>
+        <button onclick="changePassword()"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><span class="t">تغيير كلمة المرور</span></button>
+        <button onclick="logout()"><span class="ico" style="background:var(--bad-soft);color:var(--bad)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg></span><span class="t">تسجيل الخروج</span></button>
+      </div>
+      <input type="file" id="restoreInput" accept=".json,application/json,text/plain,*/*" class="hidden" onchange="importBackup(this)">
+    </section>
+
+    <div class="footer">المثلث · نظام إدارة المبيعات والأقساط<br>حقوق البرمجة © أصيل الصافي</div>
+  </main>
+
+  <nav class="nav">
+    <button data-tab="home" class="active" onclick="go('home')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 11 12 4l9 7v9h-6v-6H9v6H3z"/></svg>الرئيسية</button>
+    <button data-tab="list" onclick="go('list')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>العقود</button>
+    <button data-tab="new" onclick="resetForm();go('new')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>عقد جديد</button>
+    <button data-tab="more" onclick="go('more')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>المزيد</button>
+  </nav>
+</div>
+
+<!-- contract sheet -->
+<div class="overlay hidden" id="sheet" onclick="if(event.target===this)closeSheet()">
+  <div class="sheet" id="sheetBody"></div>
+</div>
+
+<div id="printArea"></div>
+
+<script>
+'use strict';
+/* ================= Utilities ================= */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num = v => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
+const money = v => Math.round(num(v)).toLocaleString('en-US') + ' د.ع';
+const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const bridge = window.AndroidBridge || null;
+
+function toast(msg){
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 2400);
+}
+function dialog({title, text = '', input = null, ok = 'موافق', cancel = 'إلغاء', danger = false}){
+  return new Promise(res => {
+    const d = document.createElement('div'); d.className = 'dialog';
+    d.innerHTML = `<div class="panel"><h2>${esc(title)}</h2>${text ? `<p class="hint" style="margin-top:6px">${esc(text)}</p>` : ''}
+      ${input ? `<div class="field"><label>${esc(input.label)}</label><input id="dlgIn" type="${input.type||'text'}" ${input.mode?`inputmode="${input.mode}"`:''} value="${esc(input.value||'')}"></div>` : ''}
+      <div class="actions"><button class="btn ${danger?'btn-danger':'btn-primary'}" data-r="1">${esc(ok)}</button>${cancel?`<button class="btn" data-r="0">${esc(cancel)}</button>`:''}</div></div>`;
+    d.addEventListener('click', e => {
+      const b = e.target.closest('[data-r]'); if (!b) return;
+      const r = b.dataset.r === '1' ? (input ? d.querySelector('#dlgIn').value : true) : (input ? null : false);
+      d.remove(); window.__dlg = null; res(r);
+    });
+    window.__dlg = () => { d.remove(); window.__dlg = null; res(null); };
+    document.body.appendChild(d);
+    const i = d.querySelector('#dlgIn'); if (i) setTimeout(() => i.focus(), 50);
+  });
+}
+function copyText(t){
+  if (bridge && bridge.copy) { bridge.copy(t); toast('تم النسخ'); return; }
+  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('تم النسخ'), () => dialog({title:'انسخ يدوياً', text:t, cancel:null}));
+}
+function saveFile(name, mime, content){
+  if (bridge && bridge.saveFile) { bridge.saveFile(name, mime, content); return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], {type: mime}));
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* ================= Hash (local gate) ================= */
+function cyrb128(str){
+  let h1=1779033703,h2=3144134277,h3=1013904242,h4=2773480762;
+  for(let i=0,k;i<str.length;i++){k=str.charCodeAt(i);
+    h1=h2^Math.imul(h1^k,597399067);h2=h3^Math.imul(h2^k,2869860233);
+    h3=h4^Math.imul(h3^k,951274213);h4=h1^Math.imul(h4^k,2716044179);}
+  h1=Math.imul(h3^(h1>>>18),597399067);h2=Math.imul(h4^(h2>>>22),2869860233);
+  h3=Math.imul(h1^(h3>>>17),951274213);h4=Math.imul(h2^(h4>>>19),2716044179);
+  h1^=(h2^h3^h4);h2^=h1;h3^=h1;h4^=h1;
+  return[h1>>>0,h2>>>0,h3>>>0,h4>>>0];
+}
+const passHash = (u, p) => cyrb128('INS-pass|' + u + '|' + p).map(x => x.toString(16).padStart(8, '0')).join('');
+
+/* ================= Licensing (Al-Muthalath standard) ================= */
+const PROGRAM_CODE = 'INS';
+const TRIAL_DAYS = 14;
+const TRIAL_LIMIT = 15; // عدد العقود المسموح في النسخة التجريبية
+const LIC_KEY = 'mth-lic-v1';
+const LIC_SECRET = 'MTH-7f3a91c2-2026-ASL-K9x';
+function serialFor(code, machine){
+  const m = String(machine).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const h = cyrb128(LIC_SECRET + '|' + String(code).toUpperCase() + '|' + m);
+  return h.map(x => x.toString(16).padStart(8, '0')).join('').toUpperCase().slice(0, 20).match(/.{4}/g).join('-');
+}
+function lic(){
+  let L; try { L = JSON.parse(localStorage.getItem(LIC_KEY) || 'null'); } catch(e) { L = null; }
+  if (!L || !L.machine) {
+    const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = '';
+    const r = new Uint32Array(12); (window.crypto || {}).getRandomValues ? crypto.getRandomValues(r) : r.forEach((_, i) => r[i] = Math.random() * 1e9);
+    for (let i = 0; i < 12; i++) s += A[r[i] % A.length];
+    L = {machine: s.match(/.{4}/g).join('-'), start: Date.now(), lastSeen: Date.now(), serial: ''};
+  }
+  L.lastSeen = Math.max(Date.now(), L.lastSeen || 0);
+  localStorage.setItem(LIC_KEY, JSON.stringify(L));
+  return L;
+}
+const clean = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const isActivated = () => { const L = lic(); return !!L.serial && clean(L.serial) === clean(serialFor(PROGRAM_CODE, L.machine)); };
+function daysLeft(){ const L = lic(); return Math.max(0, TRIAL_DAYS - Math.floor((L.lastSeen - L.start) / 864e5)); }
+function trialExpired(){ return !isActivated() && daysLeft() <= 0; }
+function updateLicUI(){
+  const act = isActivated();
+  $('trialBar').classList.toggle('hidden', act);
+  $('trialText').textContent = `نسخة تجريبية · متبقٍ ${daysLeft()} يوم · حد ${TRIAL_LIMIT} عقداً`;
+  $('licState').textContent = act ? 'البرنامج مفعّل' : `تجريبي · ${daysLeft()} يوم متبقٍ`;
+}
+function openActivation(canGoBack){
+  $('actMachine').textContent = lic().machine;
+  $('actBack').classList.toggle('hidden', !canGoBack);
+  const act = isActivated();
+  $('actTitle').textContent = act ? 'البرنامج مفعّل' : 'تفعيل البرنامج';
+  $('actHint').textContent = act ? 'شكراً لك، هذه النسخة مفعّلة بالكامل.'
+    : canGoBack ? `أرسل رقم الجهاز للمطور للحصول على الرقم التسلسلي. رمز البرنامج: ${PROGRAM_CODE}`
+    : 'انتهت الفترة التجريبية. بياناتك محفوظة بأمان، أرسل رقم الجهاز للمطور للحصول على الرقم التسلسلي.';
+  $('actGate').classList.remove('hidden');
+}
+function closeActivation(){ $('actGate').classList.add('hidden'); }
+function activate(){
+  const L = lic(), v = $('actSerial').value;
+  if (clean(v) !== clean(serialFor(PROGRAM_CODE, L.machine))) { toast('الرقم التسلسلي غير صحيح'); return; }
+  L.serial = v.trim(); localStorage.setItem(LIC_KEY, JSON.stringify(L));
+  closeActivation(); updateLicUI(); toast('تم تفعيل البرنامج بنجاح');
+  if (sessionOk && $('app').classList.contains('hidden')) enterApp();
+}
+
+/* ================= Auth ================= */
+const AUTH_KEY = 'mth-ins-auth';
+let sessionOk = false;
+function getAuth(){ try { return JSON.parse(localStorage.getItem(AUTH_KEY) || 'null'); } catch(e) { return null; } }
+function showAuth(){
+  const a = getAuth();
+  // ترحيل حساب البرنامج القديم إن وجد
+  if (!a && localStorage.getItem('shop_configured')) {
+    const u = localStorage.getItem('shop_user') || '', p = localStorage.getItem('shop_pass') || '';
+    localStorage.setItem(AUTH_KEY, JSON.stringify({user: u, hash: passHash(u, p)}));
+    ['shop_configured','shop_user','shop_pass'].forEach(k => localStorage.removeItem(k));
+    return showAuth();
+  }
+  $('authGate').classList.remove('hidden');
+  $('setupBox').classList.toggle('hidden', !!a);
+  $('loginBox').classList.toggle('hidden', !a);
+}
+function handleSetup(){
+  const u = $('setupUser').value.trim(), p = $('setupPass').value;
+  if (!u || !p) return toast('أدخل اسم المستخدم وكلمة المرور');
+  if (p.length < 4) return toast('كلمة المرور قصيرة جداً');
+  if (p !== $('setupPass2').value) return toast('كلمتا المرور غير متطابقتين');
+  localStorage.setItem(AUTH_KEY, JSON.stringify({user: u, hash: passHash(u, p)}));
+  enterApp();
+}
+function handleLogin(){
+  const a = getAuth(), u = $('loginUser').value.trim(), p = $('loginPass').value;
+  if (!a || u !== a.user || passHash(u, p) !== a.hash) return toast('بيانات الدخول غير صحيحة');
+  $('loginPass').value = '';
+  enterApp();
+}
+async function changePassword(){
+  const a = getAuth();
+  const old = await dialog({title:'تغيير كلمة المرور', input:{label:'كلمة المرور الحالية', type:'password'}, ok:'التالي'});
+  if (old === null) return;
+  if (passHash(a.user, old) !== a.hash) return toast('كلمة المرور الحالية غير صحيحة');
+  const nw = await dialog({title:'تغيير كلمة المرور', input:{label:'كلمة المرور الجديدة', type:'password'}, ok:'حفظ'});
+  if (!nw) return;
+  if (nw.length < 4) return toast('كلمة المرور قصيرة جداً');
+  localStorage.setItem(AUTH_KEY, JSON.stringify({user: a.user, hash: passHash(a.user, nw)}));
+  toast('تم تغيير كلمة المرور');
+}
+function logout(){ sessionOk = false; $('app').classList.add('hidden'); showAuth(); }
+function enterApp(){
+  sessionOk = true;
+  $('authGate').classList.add('hidden');
+  if (trialExpired()) { openActivation(false); return; }
+  $('app').classList.remove('hidden');
+  updateLicUI(); load(); renderAll(); go('home');
+}
+
+/* ================= Data ================= */
+const DATA_KEY = 'shopInstallmentData';
+let data = [];
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+function normalize(c){
+  c = Object.assign({}, c);
+  c.id = c.id || uid();
+  c.payments = Array.isArray(c.payments) ? c.payments : [];
+  ['totalPrice','downPayment','monthsCount','monthlyInstallment'].forEach(k => c[k] = num(c[k]));
+  if (!c.monthlyInstallment && c.monthsCount > 0) c.monthlyInstallment = Math.round(Math.max(0, c.totalPrice - c.downPayment) / c.monthsCount);
+  // عقود البرنامج القديم المسجلة "مكتمل" بدون تسديدات
+  if (c.installmentStatus === 'مكتمل' && !c.payments.length) {
+    const rest = c.totalPrice - c.downPayment;
+    if (rest > 0) c.payments.push({date: c.contractDate || todayISO(), amount: rest, note: 'تسوية من البرنامج السابق'});
+  }
+  delete c.installmentStatus;
+  return c;
+}
+function load(){ try { data = (JSON.parse(localStorage.getItem(DATA_KEY) || '[]') || []).map(normalize); } catch(e) { data = []; } }
+function persist(){
+  data.forEach(c => c.remainingPrice = remaining(c));
+  localStorage.setItem(DATA_KEY, JSON.stringify(data));
+}
+const paidSum = c => c.payments.reduce((s, p) => s + num(p.amount), 0);
+const remaining = c => Math.max(0, c.totalPrice - c.downPayment - paidSum(c));
+function addMonths(iso, n){
+  const d = new Date((iso || todayISO()) + 'T00:00:00'); const day = d.getDate();
+  d.setMonth(d.getMonth() + n); if (d.getDate() < day) d.setDate(0);
+  return d;
+}
+function monthsElapsed(iso){
+  if (!iso) return 0; let n = 0;
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  while (n < 600 && addMonths(iso, n + 1) <= now) n++;
+  return n;
+}
+function info(c){
+  const rem = remaining(c), financed = Math.max(0, c.totalPrice - c.downPayment), paid = paidSum(c);
+  const months = c.monthsCount || 0, inst = c.monthlyInstallment || (months ? financed / months : financed);
+  const dueCount = Math.min(months, monthsElapsed(c.contractDate));
+  const expected = Math.min(financed, dueCount * inst);
+  const arrears = Math.max(0, expected - paid);
+  let status = rem <= 0 ? 'done' : arrears > 0.5 ? 'late' : 'on';
+  const paidCount = inst > 0 ? Math.floor((paid + 0.5) / inst) : 0;
+  const next = rem > 0 ? addMonths(c.contractDate, Math.min(paidCount + 1, Math.max(months, 1))) : null;
+  return {rem, financed, paid, arrears, status, next, pct: financed ? Math.min(100, paid / financed * 100) : 100};
+}
+const STATUS = {done:['مكتمل','ok'], late:['متأخر','late'], on:['ملتزم','on']};
+const fmtDate = d => d ? d.toLocaleDateString('en-GB') : '-';
+
+/* ================= Rendering ================= */
+let filter = 'all';
+function card(c){
+  const i = info(c), [label, cls] = STATUS[i.status];
+  return `<button class="item" onclick="openContract('${c.id}')">
+    <div class="item-top"><div><div class="item-name">${esc(c.buyerName)}</div>
+    <div class="item-meta">${esc(c.contractNumber)} · ${esc(c.itemSold || '—')}</div></div>
+    <span class="chip ${cls}">${label}</span></div>
+    <div class="progress"><span style="width:${i.pct.toFixed(0)}%"></span></div>
+    <div class="item-bottom"><span>المتبقي <b class="num">${money(i.rem)}</b></span>
+    <span class="item-meta">${i.status === 'late' ? 'متأخرات ' + money(i.arrears) : i.next ? 'القسط القادم ' + fmtDate(i.next) : 'مسدد بالكامل'}</span></div>
+  </button>`;
+}
+function renderHome(){
+  let sales = 0, rec = 0, rem = 0, due = 0; const late = [];
+  data.forEach(c => {
+    const i = info(c); sales += c.totalPrice; rec += c.downPayment + i.paid; rem += i.rem;
+    if (i.status !== 'done') due += Math.min(i.rem, i.arrears + (i.next && i.next.getMonth() === new Date().getMonth() && i.next.getFullYear() === new Date().getFullYear() ? c.monthlyInstallment : 0));
+    if (i.status === 'late') late.push(c);
+  });
+  $('sCount').textContent = data.length;
+  $('sSales').innerHTML = money(sales);
+  $('sReceived').innerHTML = money(rec);
+  $('sRemaining').innerHTML = money(rem);
+  $('sDue').innerHTML = money(due);
+  $('lateCount').textContent = late.length;
+  late.sort((a, b) => info(b).arrears - info(a).arrears);
+  $('lateList').innerHTML = late.length ? late.map(card).join('') : `<div class="empty">${data.length ? 'لا توجد عقود متأخرة 👍' : 'لا توجد عقود بعد. أضف أول عقد من زر «عقد جديد».'}</div>`;
+}
+function renderList(){
+  const q = $('q').value.trim().toLowerCase();
+  const rows = data.filter(c => (filter === 'all' || info(c).status === filter) &&
+    (!q || [c.contractNumber, c.buyerName, c.itemSold, c.guarantorName, c.buyerPhone].some(v => String(v || '').toLowerCase().includes(q))))
+    .sort((a, b) => String(b.contractDate).localeCompare(String(a.contractDate)));
+  $('contractList').innerHTML = rows.length ? rows.map(card).join('') : '<div class="empty">لا توجد نتائج</div>';
+}
+function renderAll(){ renderHome(); renderList(); updateLicUI(); }
+$('filters').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  filter = b.dataset.f;
+  [...$('filters').children].forEach(x => x.classList.toggle('active', x === b));
+  renderList();
+});
+
+let currentTab = 'home';
+function go(tab){
+  currentTab = tab;
+  ['home','list','new','more'].forEach(t => $('tab-' + t).classList.toggle('hidden', t !== tab));
+  document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  window.scrollTo(0, 0);
+}
+
+/* ================= Form ================= */
+const FIELDS = ['contractNumber','contractDate','buyerName','buyerPhone','itemSold','guarantorName','guarantorPhone','totalPrice','downPayment','monthsCount','contractNotes'];
+function calc(){
+  const rest = Math.max(0, num($('totalPrice').value) - num($('downPayment').value)), m = parseInt($('monthsCount').value) || 0;
+  $('remainingPrice').value = rest.toLocaleString('en-US');
+  $('monthlyInstallment').value = (m > 0 ? Math.round(rest / m) : 0).toLocaleString('en-US');
+}
+function nextContractNumber(){
+  let max = 0; data.forEach(c => { const m = String(c.contractNumber).match(/(\d+)\s*$/); if (m) max = Math.max(max, +m[1]); });
+  return 'INV-' + String(max + 1).padStart(4, '0');
+}
+function resetForm(){
+  FIELDS.forEach(f => $(f).value = '');
+  $('editId').value = '';
+  $('contractNumber').value = nextContractNumber();
+  $('contractDate').value = todayISO();
+  $('formTitle').textContent = 'عقد جديد';
+  $('saveBtn').textContent = 'حفظ العقد';
+  $('cancelEditBtn').classList.add('hidden');
+  calc();
+}
+function editContract(id){
+  const c = data.find(x => x.id === id); if (!c) return;
+  closeSheet();
+  FIELDS.forEach(f => $(f).value = c[f] ?? '');
+  $('editId').value = id;
+  $('formTitle').textContent = 'تعديل العقد';
+  $('saveBtn').textContent = 'حفظ التعديلات';
+  $('cancelEditBtn').classList.remove('hidden');
+  calc(); go('new');
+}
+function saveContract(){
+  const v = {}; FIELDS.forEach(f => v[f] = $(f).value.trim());
+  if (!v.contractNumber || !v.buyerName) return toast('أدخل رقم العقد واسم العميل');
+  if (num(v.totalPrice) <= 0) return toast('أدخل السعر الكلي');
+  if (num(v.downPayment) > num(v.totalPrice)) return toast('المقدمة أكبر من السعر الكلي');
+  const id = $('editId').value;
+  if (data.some(c => c.contractNumber === v.contractNumber && c.id !== id)) return toast('رقم العقد مستخدم مسبقاً');
+  if (!id && !isActivated() && data.length >= TRIAL_LIMIT) {
+    toast(`النسخة التجريبية تسمح بـ ${TRIAL_LIMIT} عقداً فقط`); openActivation(true); return;
+  }
+  const m = parseInt(v.monthsCount) || 0, rest = Math.max(0, num(v.totalPrice) - num(v.downPayment));
+  v.monthlyInstallment = m > 0 ? Math.round(rest / m) : rest;
+  if (id) { const i = data.findIndex(c => c.id === id); data[i] = normalize(Object.assign({}, data[i], v)); }
+  else data.push(normalize(Object.assign({id: uid(), payments: [], createdAt: Date.now()}, v)));
+  persist(); renderAll();
+  toast(id ? 'تم حفظ التعديلات' : 'تم حفظ العقد');
+  const savedId = id || data[data.length - 1].id;
+  resetForm(); go('list'); openContract(savedId);
+}
+
+/* ================= Contract sheet ================= */
+let openId = null;
+function openContract(id){
+  const c = data.find(x => x.id === id); if (!c) return;
+  openId = id;
+  const i = info(c), [label, cls] = STATUS[i.status];
+  const tel = p => String(p || '').replace(/[^\d+]/g, '');
+  const wa = p => { let d = tel(p).replace(/^\+/, ''); if (d.startsWith('0')) d = '964' + d.slice(1); return d; };
+  $('sheetBody').innerHTML = `<div class="grab"></div>
+    <div class="item-top"><div><h2>${esc(c.buyerName)}</h2><div class="item-meta">${esc(c.contractNumber)} · ${esc(c.contractDate)}</div></div><span class="chip ${cls}">${label}</span></div>
+    <div class="stats" style="margin-top:14px">
+      <div class="stat bad"><div class="k">المتبقي</div><div class="v num">${money(i.rem)}</div></div>
+      <div class="stat acc"><div class="k">القسط الشهري</div><div class="v num">${money(c.monthlyInstallment)}</div></div>
+      ${i.arrears > 0.5 && i.rem > 0 ? `<div class="stat wide bad"><div class="k">متأخرات مستحقة</div><div class="v num">${money(Math.min(i.arrears, i.rem))}</div></div>` : ''}
+    </div>
+    <div class="progress" style="margin-top:12px"><span style="width:${i.pct.toFixed(0)}%"></span></div>
+    <div class="item-meta" style="margin-top:4px">مسدد ${i.pct.toFixed(0)}% ${i.next ? '· القسط القادم ' + fmtDate(i.next) : ''}</div>
+    <div class="row-btns" style="margin-top:14px">
+      ${i.rem > 0 ? `<button class="btn btn-primary" onclick="addPayment('${c.id}')">تسديد قسط</button>` : ''}
+      ${c.buyerPhone ? `<a class="btn" href="tel:${tel(c.buyerPhone)}">اتصال</a><a class="btn" href="https://wa.me/${wa(c.buyerPhone)}?text=${encodeURIComponent(`مرحباً ${c.buyerName}، نذكّركم بقسط العقد ${c.contractNumber} بمبلغ ${money(c.monthlyInstallment)}. المتبقي ${money(i.rem)}.`)}">واتساب</a>` : ''}
+    </div>
+    <div class="kv">
+      <div>السلعة<b>${esc(c.itemSold || '-')}</b></div>
+      <div>هاتف العميل<b dir="ltr" style="text-align:right">${esc(c.buyerPhone || '-')}</b></div>
+      <div>الكفيل<b>${esc(c.guarantorName || '-')}</b></div>
+      <div>هاتف الكفيل<b dir="ltr" style="text-align:right">${esc(c.guarantorPhone || '-')}</b></div>
+      <div>السعر الكلي<b class="num">${money(c.totalPrice)}</b></div>
+      <div>المقدمة<b class="num">${money(c.downPayment)}</b></div>
+      <div>عدد الأشهر<b>${c.monthsCount || '-'}</b></div>
+      <div>مجموع التسديدات<b class="num">${money(i.paid)}</b></div>
+      ${c.contractNotes ? `<div class="full">ملاحظات<b>${esc(c.contractNotes)}</b></div>` : ''}
+    </div>
+    <div class="section-title">سجل التسديدات (${c.payments.length})</div>
+    <div>${c.payments.length ? c.payments.map((p, k) => `<div class="pay"><div><b class="num">${money(p.amount)}</b><small>${esc(p.date)}${p.note ? ' · ' + esc(p.note) : ''}</small></div><button class="chip late" onclick="delPayment('${c.id}',${k})">حذف</button></div>`).reverse().join('') : '<div class="item-meta">لا توجد تسديدات بعد</div>'}</div>
+    <div class="row-btns" style="margin-top:16px">
+      <button class="btn btn-brass" onclick="printInvoice('${c.id}')">طباعة / PDF</button>
+      <button class="btn" onclick="editContract('${c.id}')">تعديل</button>
+      <button class="btn btn-danger" onclick="deleteContract('${c.id}')">حذف</button>
+    </div>`;
+  $('sheet').classList.remove('hidden');
+}
+function closeSheet(){ $('sheet').classList.add('hidden'); openId = null; }
+async function addPayment(id){
+  const c = data.find(x => x.id === id), i = info(c);
+  const sug = Math.min(i.rem, Math.max(c.monthlyInstallment, 0)) || i.rem;
+  const v = await dialog({title:'تسديد قسط', text:`المتبقي ${money(i.rem)}`, input:{label:'المبلغ المستلم (د.ع)', type:'number', mode:'numeric', value: Math.round(sug)}, ok:'تسجيل'});
+  if (v === null) return;
+  const amt = num(v);
+  if (amt <= 0) return toast('أدخل مبلغاً صحيحاً');
+  if (amt > i.rem + 0.5) return toast('المبلغ أكبر من المتبقي');
+  c.payments.push({date: todayISO(), amount: amt, note: ''});
+  persist(); renderAll(); openContract(id); toast('تم تسجيل التسديد');
+}
+async function delPayment(id, k){
+  if (!await dialog({title:'حذف التسديد؟', text:'سيعود المبلغ إلى المتبقي.', ok:'حذف', danger:true})) return;
+  const c = data.find(x => x.id === id); c.payments.splice(k, 1);
+  persist(); renderAll(); openContract(id);
+}
+async function deleteContract(id){
+  const c = data.find(x => x.id === id);
+  if (!await dialog({title:'حذف العقد؟', text:`سيتم حذف عقد ${c.buyerName} وكل تسديداته نهائياً.`, ok:'حذف', danger:true})) return;
+  data = data.filter(x => x.id !== id); persist(); closeSheet(); renderAll(); toast('تم حذف العقد');
+}
+function printInvoice(id){
+  const c = data.find(x => x.id === id), i = info(c);
+  const r = (k, v) => `<tr><th>${k}</th><td>${esc(v)}</td></tr>`;
+  $('printArea').innerHTML = `<div style="display:flex;align-items:center;gap:10px;border-bottom:2px solid #0e5a52;padding-bottom:10px">
+    <svg width="40" height="40" style="color:#0e5a52"><use href="#logo"/></svg><div><div style="font-size:20px;font-weight:700">المثلث</div><div>نظام إدارة المبيعات والأقساط</div></div>
+    <div style="margin-inline-start:auto;text-align:left">فاتورة بيع بالتقسيط<br>${esc(c.contractNumber)}</div></div>
+    <table>${r('التاريخ', c.contractDate)}${r('اسم العميل', c.buyerName)}${r('هاتف العميل', c.buyerPhone)}${r('السلعة', c.itemSold)}
+    ${r('الكفيل', c.guarantorName)}${r('هاتف الكفيل', c.guarantorPhone)}${r('السعر الكلي', money(c.totalPrice))}${r('المقدمة', money(c.downPayment))}
+    ${r('عدد الأشهر', c.monthsCount)}${r('القسط الشهري', money(c.monthlyInstallment))}${r('مجموع التسديدات', money(i.paid))}${r('المتبقي', money(i.rem))}${c.contractNotes ? r('ملاحظات', c.contractNotes) : ''}</table>
+    <div style="display:flex;justify-content:space-between;margin-top:40px"><span>توقيع العميل: ..................</span><span>توقيع الكفيل: ..................</span></div>
+    <p style="text-align:center;margin-top:30px;font-size:11px;color:#555">المثلث · نظام إدارة المبيعات والأقساط — حقوق البرمجة © أصيل الصافي</p>`;
+  if (bridge && bridge.print) bridge.print('فاتورة ' + c.contractNumber); else window.print();
+}
+
+/* ================= Backup / Export ================= */
+function stamp(){ return todayISO(); }
+function exportBackup(){
+  if (!data.length) return toast('لا توجد بيانات');
+  persist();
+  saveFile(`نسخة-الأقساط-${stamp()}.json`, 'application/json', JSON.stringify({app:'almuthalath-installments', version:1, exportedAt:new Date().toISOString(), contracts:data}, null, 1));
+}
+function pickRestore(){ $('restoreInput').click(); }
+function importBackup(input){
+  const f = input.files[0]; input.value = ''; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = async e => {
+    let arr;
+    try { const j = JSON.parse(e.target.result); arr = Array.isArray(j) ? j : j.contracts; } catch(err) { arr = null; }
+    if (!Array.isArray(arr)) return toast('الملف غير صالح');
+    const merge = await dialog({title:`استعادة ${arr.length} عقد`, text:'دمج مع البيانات الحالية أم استبدالها بالكامل؟', ok:'دمج', cancel:'استبدال'});
+    if (merge === null) return;
+    const incoming = arr.map(normalize);
+    if (merge) {
+      const ids = new Set(data.map(c => c.id)), nums = new Set(data.map(c => c.contractNumber));
+      incoming.forEach(c => { if (!ids.has(c.id) && !nums.has(c.contractNumber)) data.push(c); });
+    } else data = incoming;
+    persist(); renderAll(); toast('تمت الاستعادة');
+  };
+  rd.readAsText(f);
+}
+function exportExcel(){
+  if (!data.length) return toast('لا توجد بيانات');
+  const h = ['رقم العقد','التاريخ','العميل','الهاتف','السلعة','الكفيل','هاتف الكفيل','السعر الكلي','المقدمة','الأشهر','القسط','المسدد','المتبقي','الحالة'];
+  let x = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body dir="rtl"><table border="1"><tr>${h.map(t => `<th style="background:#0e5a52;color:#fff">${t}</th>`).join('')}</tr>`;
+  data.forEach(c => { const i = info(c);
+    x += '<tr>' + [c.contractNumber, c.contractDate, c.buyerName, c.buyerPhone, c.itemSold, c.guarantorName, c.guarantorPhone, c.totalPrice, c.downPayment, c.monthsCount, c.monthlyInstallment, i.paid, i.rem, STATUS[i.status][0]].map(v => `<td>${esc(v)}</td>`).join('') + '</tr>'; });
+  x += '</table></body></html>';
+  saveFile(`سجل-الأقساط-${stamp()}.xls`, 'application/vnd.ms-excel', x);
+}
+
+/* ================= Android back button ================= */
+window.__back = function(){
+  if (window.__dlg) { window.__dlg(); return true; }
+  if (!$('sheet').classList.contains('hidden')) { closeSheet(); return true; }
+  if (!$('actGate').classList.contains('hidden') && !$('actBack').classList.contains('hidden')) { closeActivation(); return true; }
+  if (sessionOk && currentTab !== 'home' && !$('app').classList.contains('hidden')) { go('home'); return true; }
+  return false;
+};
+window.__fileSaved = ok => toast(ok ? 'تم حفظ الملف' : 'لم يتم الحفظ');
+
+/* ================= Start ================= */
+lic();
+showAuth();
+</script>
+</body>
+</html>

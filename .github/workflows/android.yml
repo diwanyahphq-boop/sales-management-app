@@ -1,0 +1,52 @@
+name: Android APK (نسخة الهاتف)
+
+on:
+  push:
+    branches: [main, ccr-0315808d-6o25ce]
+    paths: ['mobile/**', 'android/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy mobile app into Android assets
+        run: cp mobile/index.html android/app/src/main/assets/index.html
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build APK
+        run: gradle -p android assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk AlMuthalath-Installments.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AlMuthalath-Installments-apk
+          path: AlMuthalath-Installments.apk
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-${{ github.run_number }}
+          name: المثلث للأقساط — نسخة أندرويد ${{ github.run_number }}
+          prerelease: true
+          target_commitish: ${{ github.sha }}
+          body: |
+            المثلث · نظام إدارة المبيعات والأقساط — نسخة أندرويد.
+            حمّل ملف AlMuthalath-Installments.apk على الهاتف وثبّته (اسمح بالتثبيت من مصادر غير معروفة).
+            حقوق البرمجة © أصيل الصافي
+          files: AlMuthalath-Installments.apk
